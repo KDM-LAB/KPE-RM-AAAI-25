@@ -1,0 +1,1 @@
+Run the db_populate.py file first to create and populate the database with gold_standard_data. After that run `uvicorn main:app --reload` in terminal to start the backend server.
