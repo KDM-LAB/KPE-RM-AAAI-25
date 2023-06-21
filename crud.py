@@ -1,8 +1,25 @@
 from sqlalchemy.orm import Session
 import models, schemas
 from keybert_model import keyword_from_paper
-from db import engine, sessionLocal
 from similarity_model import keyword_similarity
+#from db import engine, sessionLocal
+
+def json_maker(x):
+    # this relies on the fact that our sequence contains chunks of similar numbers never repeating
+    main_dict = {}
+    sub_dict = {}
+    initial_val = list(x.keys())[0][0]
+    for key, val in x.items():
+        if key[0] == initial_val:
+            sub_dict[key[1]] = val
+        else:
+            main_dict[initial_val] = sub_dict.copy()
+            sub_dict.clear()
+            sub_dict[key[1]] = val
+            initial_val = key[0]
+    main_dict[initial_val] = sub_dict
+
+    return main_dict
 
 def get_papers_by_id(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.Papers).offset(skip).limit(limit).all()
@@ -44,7 +61,7 @@ def compute_papers_similarity(db: Session, model_name: str):
     reviewer_cache = results[0].reviewer_pk # setting first reviewer
     past_papers_cache = db.query(models.Model_Paper_Keywords).join(models.Reviewers_Papers, models.Reviewers_Papers.paper_pk == models.Model_Paper_Keywords.paper_pk).filter((models.Reviewers_Papers.reviewer_pk == reviewer_cache) and (model.Model_Paper_Keywords.model_name == model_name)).all()
     output = {}
-    for idx, result in enumerate(results):
+    for result in results:
         reviewed_paper_data = db.query(models.Model_Paper_Keywords).filter(models.Model_Paper_Keywords.paper_pk == result.paper_pk).first()
         if reviewed_paper_data.model_keywords:
             reviewer = result.reviewer_pk
@@ -61,26 +78,14 @@ def compute_papers_similarity(db: Session, model_name: str):
                 if past_paper.model_keywords:
                     similarity += keyword_similarity(past_paper.model_keywords, reviewed_paper_data.model_keywords)
                     terms += 1
-            average_similarity = similarity/terms
+            average_similarity = round(similarity/terms, 2)
         else:
             average_similarity = None
-
+        
         output[(result.reviewer_pk, result.paper_pk)] = average_similarity
         similarity = models.Model_Reviewer_Paper_Similarity(reviewer_pk=result.reviewer_pk, paper_pk=result.paper_pk, model_name=model_name, model_similarity=average_similarity)
         db.add(similarity)
         db.commit()
 
-    return output
+    return json_maker(output)
 
-compute_papers_similarity(sessionLocal(), "keyBERT")
-
-# def compute_papers_similarity(db: Session, model_name: str):
-#     # results = db.query(models.Rating.reviewer_pk, models.Rating.paper_pk).all()
-#     # reviewer = results[0].reviewer_pk # setting first reviewer
-#     # print(reviewer)
-#     # past_papers = db.query(models.Papers).join(models.Reviewers_Papers, models.Reviewers_Papers.paper_pk == models.Papers.paper_pk).filter(models.Reviewers_Papers.reviewer_pk == 1).all()
-#     past_papers = db.query(models.Model_Paper_Keywords).join(models.Reviewers_Papers, models.Reviewers_Papers.paper_pk == models.Model_Paper_Keywords.paper_pk).filter((models.Reviewers_Papers.reviewer_pk == 1) and (model.Model_Paper_Keywords.model_name == model_name)).all()
-#     print(past_papers)
-#     # for idx, result in enumerate(results):
-#     #     if result.reviewer_pk == 1:
-#     #         print(result)

@@ -24,7 +24,9 @@ def validity_check():
 def extract_keywords(model_name: str, skip: int = 0, limit: int = 5, db: Session = Depends(get_db)):
     return crud.extract_papers_keywords(db, model_name=model_name, skip=skip, limit=limit)
 
-
+@app.post("/compute_similarity/{model_name}/")
+def compute_similarity(model_name: str, db: Session = Depends(get_db)):
+    return crud.compute_papers_similarity(db, model_name=model_name)
 
 # GET/READ:
 @app.get("/reviewers/")#, response_model=list[schemas.User])
