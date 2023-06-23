@@ -1,7 +1,8 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, Query
 from sqlalchemy.orm import Session
 from db import engine, sessionLocal
 import models, schemas, crud
+from typing import Annotated
 
 # models.Base.metadata.create_all(bind=engine)
 
@@ -38,3 +39,10 @@ def get_reviewers(skip: int = 0, limit: int = 20, db: Session = Depends(get_db))
 def get_papers(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     items = crud.get_papers_by_id(db, skip=skip, limit=limit)
     return items
+
+@app.get("/similarity/{model_name}")
+def get_similarity_values(model_name: str, \
+                        reviewer_pk: Annotated[int, Query(ge=0, le=58, description="0 to get all reviewer's data; [1,58] to get specific data")] = 0, \
+                        norm: Annotated[str | None, Query(description="'min_max' or 'z-score'; no normalization by default")] = None, \
+                        db: Session = Depends(get_db)):
+    return crud.get_model_similarity_values(db, model_name=model_name, reviewer_pk=reviewer_pk, norm=norm)
