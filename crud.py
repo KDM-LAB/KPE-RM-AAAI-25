@@ -2,8 +2,9 @@ from sqlalchemy.orm import Session
 import models, schemas
 from keybert_model import keyword_from_paper
 from similarity_model import keyword_similarity
+from correlations import get_correlations
 import numpy as np
-# from db import engine, sessionLocal
+from db import engine, sessionLocal
 
 def json_maker(x):
     # this relies on the fact that our sequence contains chunks of similar numbers never repeating
@@ -90,8 +91,8 @@ def compute_papers_similarity(db: Session, model_name: str):
 
     return json_maker(output)
 
-def get_model_similarity_values(db: Session, model_name: str, reviewer_pk: int, norm: str | None):
-    if reviewer_pk == -1:
+def get_model_similarity_values(db: Session, model_name: str, reviewer_pk: int, norm: bool):
+    if reviewer_pk == 0:
         results = db.query(models.Rating.reviewer_pk, models.Rating.paper_pk, models.Rating.rating, models.Model_Reviewer_Paper_Similarity.model_similarity) \
             .join(models.Model_Reviewer_Paper_Similarity, (models.Rating.reviewer_pk == models.Model_Reviewer_Paper_Similarity.reviewer_pk) & (models.Rating.paper_pk == models.Model_Reviewer_Paper_Similarity.paper_pk)) \
             .filter(models.Model_Reviewer_Paper_Similarity.model_name == model_name).all()
@@ -100,31 +101,39 @@ def get_model_similarity_values(db: Session, model_name: str, reviewer_pk: int, 
             .join(models.Model_Reviewer_Paper_Similarity, (models.Rating.reviewer_pk == models.Model_Reviewer_Paper_Similarity.reviewer_pk) & (models.Rating.paper_pk == models.Model_Reviewer_Paper_Similarity.paper_pk)) \
             .filter((models.Rating.reviewer_pk == reviewer_pk) & (models.Model_Reviewer_Paper_Similarity.model_name == model_name)).all()
 
-    norm_model_similarity = []
-    if norm == "min_max":
-        model_similarity = [result.model_similarity for result in results]
-        minValue, maxValue = min(model_similarity), max(model_similarity)
+    if norm:
+        model_similarity = []
+        model_old_similarity = [result.model_similarity for result in results]
+        minValue, maxValue = min(model_old_similarity), max(model_old_similarity)
         for result in results:
-            norm_model_similarity.append(round(((result.model_similarity - minValue)/(maxValue - minValue))*(5-0) + 0, 2))
+            model_similarity.append(((result.model_similarity - minValue)/(maxValue - minValue))*(5-0) + 0)
 
-    if norm == "z-score":
-        zscore_similarity = []
+    else:
         model_similarity = [result.model_similarity for result in results]
-        meanValue, stdValue = np.mean(model_similarity), np.std(model_similarity)
-        for result in results:
-            zscore_similarity.append(round((result.model_similarity - meanValue)/(stdValue + 1e-4), 2))
-
-        minValue, maxValue = min(zscore_similarity), max(zscore_similarity)
-        for similarity in zscore_similarity:
-            norm_model_similarity.append(round(((similarity - minValue)/(maxValue - minValue))*(5-0) + 0, 2))
-
-
-    if not norm_model_similarity:
-        norm_model_similarity = [result.model_similarity for result in results]
 
     return [{"Reviewer_pk":result.reviewer_pk,
             "Paper_pk":result.paper_pk,
             "Rating":result.rating,
-            "Model_similarity":norm_model_similarity[idx]}
+            "Model_similarity":round(model_similarity[idx], 2)}
             for idx, result in enumerate(results)]
+
+def get_model_correlation_values(db: Session, model_name: str, layout: str, norm: bool):
+    if layout == "whole":
+        output = get_model_similarity_values(db=db, model_name=model_name, reviewer_pk=0, norm=norm)
+        rating = [row["Rating"] for row in output]
+        model_similarity = [row["Model_similarity"] for row in output]
+        return get_correlations(rating, model_similarity)
+
+    elif layout == "by_reviewer":
+        return_result = {}
+        for idx in range(1,59,1):
+            output = get_model_similarity_values(db=db, model_name=model_name, reviewer_pk=idx, norm=norm)
+            rating = [row["Rating"] for row in output]
+            model_similarity = [row["Model_similarity"] for row in output]
+            return_result[idx] = get_correlations(rating, model_similarity)
+        return return_result
+
+    else:
+        raise Exception("Unknown format, enter either 'whole' or 'by_reviewer'")
+
 

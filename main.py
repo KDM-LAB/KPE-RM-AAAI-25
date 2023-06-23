@@ -43,6 +43,13 @@ def get_papers(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
 @app.get("/similarity/{model_name}")
 def get_similarity_values(model_name: str, \
                         reviewer_pk: Annotated[int, Query(ge=0, le=58, description="0 to get all reviewer's data; [1,58] to get specific data")] = 0, \
-                        norm: Annotated[str | None, Query(description="'min_max' or 'z-score'; no normalization by default")] = None, \
+                        norm: Annotated[bool, Query(description="if True, does min-max normalization else no normalization")] = False, \
                         db: Session = Depends(get_db)):
     return crud.get_model_similarity_values(db, model_name=model_name, reviewer_pk=reviewer_pk, norm=norm)
+
+@app.get("/correlation/{model_name}")
+def get_correlation_values(model_name: str, \
+                        layout: Annotated[str, Query(description="'whole' to get correlation of all reviewers; 'by_reviewer' to get individual correlations")] = "whole", \
+                        norm: Annotated[bool, Query(description="if True, does min-max normalization else no normalization")] = False, \
+                        db: Session = Depends(get_db)):
+    return crud.get_model_correlation_values(db, model_name=model_name, layout=layout, norm=norm)
