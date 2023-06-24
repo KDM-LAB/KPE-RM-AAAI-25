@@ -123,46 +123,59 @@ def compute_papers_similarity(db: Session, model_name: str):
 
     return {"similarity_wo_pdf":json_maker(output_wo_pdf), "similarity_w_pdf":json_maker(output_w_pdf)}
 
-def get_model_similarity_values(db: Session, model_name: str, reviewer_pk: int, norm: bool):
-    if reviewer_pk == 0:
-        results = db.query(models.Rating.reviewer_pk, models.Rating.paper_pk, models.Rating.rating, models.Model_Reviewer_Paper_Similarity.model_similarity) \
+def get_model_similarity_values(db: Session, model_name: str, reviewer_pk: int | None, norm: bool):
+    if reviewer_pk is None:
+        results = db.query(models.Rating.reviewer_pk, models.Rating.paper_pk, models.Rating.rating, models.Model_Reviewer_Paper_Similarity.model_similarity_wo_pdf, models.Model_Reviewer_Paper_Similarity.model_similarity_w_pdf) \
             .join(models.Model_Reviewer_Paper_Similarity, (models.Rating.reviewer_pk == models.Model_Reviewer_Paper_Similarity.reviewer_pk) & (models.Rating.paper_pk == models.Model_Reviewer_Paper_Similarity.paper_pk)) \
             .filter(models.Model_Reviewer_Paper_Similarity.model_name == model_name).all()
     else:
-        results = db.query(models.Rating.reviewer_pk, models.Rating.paper_pk, models.Rating.rating, models.Model_Reviewer_Paper_Similarity.model_similarity) \
+        results = db.query(models.Rating.reviewer_pk, models.Rating.paper_pk, models.Rating.rating, models.Model_Reviewer_Paper_Similarity.model_similarity_wo_pdf, models.Model_Reviewer_Paper_Similarity.model_similarity_w_pdf) \
             .join(models.Model_Reviewer_Paper_Similarity, (models.Rating.reviewer_pk == models.Model_Reviewer_Paper_Similarity.reviewer_pk) & (models.Rating.paper_pk == models.Model_Reviewer_Paper_Similarity.paper_pk)) \
             .filter((models.Rating.reviewer_pk == reviewer_pk) & (models.Model_Reviewer_Paper_Similarity.model_name == model_name)).all()
 
     if norm:
-        model_similarity = []
-        model_old_similarity = [result.model_similarity for result in results]
-        minValue, maxValue = min(model_old_similarity), max(model_old_similarity)
-        for result in results:
-            model_similarity.append(((result.model_similarity - minValue)/(maxValue - minValue))*(5-0) + 0)
+        model_similarity_wo_pdf = []
+        model_similarity_w_pdf = []
 
+        model_old_similarity_wo_pdf = [result.model_similarity_wo_pdf for result in results]
+        model_old_similarity_w_pdf = [result.model_similarity_w_pdf for result in results]
+
+        minValue_wo_pdf, maxValue_wo_pdf = min(model_old_similarity_wo_pdf), max(model_old_similarity_wo_pdf)
+        minValue_w_pdf, maxValue_w_pdf = min(model_old_similarity_w_pdf), max(model_old_similarity_w_pdf)
+
+        for result in results:
+            model_similarity_wo_pdf.append(((result.model_similarity_wo_pdf - minValue_wo_pdf)/(maxValue_wo_pdf - minValue_wo_pdf))*(5-0) + 0) # New range [0,5]
+            model_similarity_w_pdf.append(((result.model_similarity_w_pdf - minValue_w_pdf)/(maxValue_w_pdf - minValue_w_pdf))*(5-0) + 0)
     else:
-        model_similarity = [result.model_similarity for result in results]
+        model_similarity_wo_pdf = [result.model_similarity_wo_pdf for result in results]
+        model_similarity_w_pdf = [result.model_similarity_w_pdf for result in results]
 
     return [{"Reviewer_pk":result.reviewer_pk,
             "Paper_pk":result.paper_pk,
             "Rating":result.rating,
-            "Model_similarity":round(model_similarity[idx], 2)}
+            "Model_Similarity_wo_pdf":round(model_similarity_wo_pdf[idx], 2),
+            "Model_Similarity_w_pdf":round(model_similarity_w_pdf[idx], 2)}
             for idx, result in enumerate(results)]
 
 def get_model_correlation_values(db: Session, model_name: str, layout: str, norm: bool):
     if layout == "whole":
-        output = get_model_similarity_values(db=db, model_name=model_name, reviewer_pk=0, norm=norm)
+        output = get_model_similarity_values(db=db, model_name=model_name, reviewer_pk=None, norm=norm)
         rating = [row["Rating"] for row in output]
-        model_similarity = [row["Model_similarity"] for row in output]
-        return get_correlations(rating, model_similarity)
+        model_similarity_wo_pdf = [row["Model_Similarity_wo_pdf"] for row in output]
+        model_similarity_w_pdf = [row["Model_Similarity_w_pdf"] for row in output]
+        return {"Model_Correlation_wo_pdf": get_correlations(rating, model_similarity_wo_pdf),
+                "Model_Correlation_w_pdf": get_correlations(rating, model_similarity_w_pdf)}
 
     elif layout == "by_reviewer":
         return_result = {}
         for idx in range(1,59,1):
             output = get_model_similarity_values(db=db, model_name=model_name, reviewer_pk=idx, norm=norm)
             rating = [row["Rating"] for row in output]
-            model_similarity = [row["Model_similarity"] for row in output]
-            return_result[idx] = get_correlations(rating, model_similarity)
+            model_similarity_wo_pdf = [row["Model_Similarity_wo_pdf"] for row in output]
+            model_similarity_w_pdf = [row["Model_Similarity_w_pdf"] for row in output]
+            combined_result = {"Model_Correlation_wo_pdf": get_correlations(rating, model_similarity_wo_pdf),
+                            "Model_Correlation_w_pdf": get_correlations(rating, model_similarity_w_pdf)}
+            return_result[idx] = combined_result
         return return_result
 
     else:
