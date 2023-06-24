@@ -75,34 +75,53 @@ def compute_papers_similarity(db: Session, model_name: str):
     results = db.query(models.Rating.reviewer_pk, models.Rating.paper_pk).all()
     reviewer_cache = results[0].reviewer_pk # setting first reviewer
     past_papers_cache = db.query(models.Model_Paper_Keywords).join(models.Reviewers_Papers, models.Reviewers_Papers.paper_pk == models.Model_Paper_Keywords.paper_pk).filter((models.Reviewers_Papers.reviewer_pk == reviewer_cache) and (model.Model_Paper_Keywords.model_name == model_name)).all()
-    output = {}
+    output_wo_pdf = {}
+    output_w_pdf = {}
     for result in results:
         reviewed_paper_data = db.query(models.Model_Paper_Keywords).filter(models.Model_Paper_Keywords.paper_pk == result.paper_pk).first()
-        if reviewed_paper_data.model_keywords:
-            reviewer = result.reviewer_pk
-            if reviewer == reviewer_cache:
-                past_papers_data = past_papers_cache
-            else:
-                past_papers_data = db.query(models.Model_Paper_Keywords).join(models.Reviewers_Papers, models.Reviewers_Papers.paper_pk == models.Model_Paper_Keywords.paper_pk).filter((models.Reviewers_Papers.reviewer_pk == reviewer) and (model.Model_Paper_Keywords.model_name == model_name)).all()
-                past_papers_cache = past_papers_data
-                reviewer_cache = reviewer
-
-            similarity = 0
-            terms = 0
-            for past_paper in past_papers_data:
-                if past_paper.model_keywords:
-                    similarity += keyword_similarity(past_paper.model_keywords, reviewed_paper_data.model_keywords)
-                    terms += 1
-            average_similarity = round(similarity/terms, 2)
+        # Note: model_paper_keywords.model_keywords_w_pdf can be empty string if none of title, abstract or pdf_text are available
+        reviewer = result.reviewer_pk
+        if reviewer == reviewer_cache:
+            past_papers_data = past_papers_cache
         else:
-            average_similarity = None
+            past_papers_data = db.query(models.Model_Paper_Keywords).join(models.Reviewers_Papers, models.Reviewers_Papers.paper_pk == models.Model_Paper_Keywords.paper_pk).filter((models.Reviewers_Papers.reviewer_pk == reviewer) and (model.Model_Paper_Keywords.model_name == model_name)).all()
+            past_papers_cache = past_papers_data
+            reviewer_cache = reviewer
+
+        if reviewed_paper_data.model_keywords_wo_pdf:
+            similarity_wo_pdf, terms_wo_pdf = 0, 0
+            for past_paper in past_papers_data:
+                if past_paper.model_keywords_wo_pdf:
+                    similarity_wo_pdf += keyword_similarity(past_paper.model_keywords_wo_pdf, reviewed_paper_data.model_keywords_wo_pdf)
+                    terms_wo_pdf += 1
+            if similarity_wo_pdf == 0:
+                average_similarity_wo_pdf = None # can't make it zero, cause then it can be infered as the model giving a similarity of 0 instead of data inavailability
+            else:
+                average_similarity_wo_pdf = round(similarity_wo_pdf/terms_wo_pdf, 2)
+        else:
+            average_similarity_wo_pdf = None # can't make it zero, cause then it can be infered as the model giving a similarity of 0 instead of data inavailability
+
+        if reviewed_paper_data.model_keywords_w_pdf:
+            similarity_w_pdf, terms_w_pdf = 0, 0
+            for past_paper in past_papers_data:
+                if past_paper.model_keywords_w_pdf:
+                    similarity_w_pdf += keyword_similarity(past_paper.model_keywords_w_pdf, reviewed_paper_data.model_keywords_w_pdf)
+                    terms_w_pdf += 1
+            if similarity_w_pdf == 0:
+                average_similarity_w_pdf = None # can't make it zero, cause then it can be infered as the model giving a similarity of 0 instead of data inavailability
+            else:
+                average_similarity_w_pdf = round(similarity_w_pdf/terms_w_pdf, 2)
+        else:
+            average_similarity_w_pdf = None # can't make it zero, cause then it can be infered as the model giving a similarity of 0 instead of data inavailability
         
-        output[(result.reviewer_pk, result.paper_pk)] = average_similarity
-        similarity = models.Model_Reviewer_Paper_Similarity(reviewer_pk=result.reviewer_pk, paper_pk=result.paper_pk, model_name=model_name, model_similarity=average_similarity)
+        similarity = models.Model_Reviewer_Paper_Similarity(reviewer_pk=result.reviewer_pk, paper_pk=result.paper_pk, model_name=model_name, model_similarity_wo_pdf=average_similarity_wo_pdf, model_similarity_w_pdf=average_similarity_w_pdf)
         db.add(similarity)
         db.commit()
 
-    return json_maker(output)
+        output_wo_pdf[(result.reviewer_pk, result.paper_pk)] = average_similarity_wo_pdf
+        output_w_pdf[(result.reviewer_pk, result.paper_pk)] = average_similarity_w_pdf
+
+    return {"similarity_wo_pdf":json_maker(output_wo_pdf), "similarity_w_pdf":json_maker(output_w_pdf)}
 
 def get_model_similarity_values(db: Session, model_name: str, reviewer_pk: int, norm: bool):
     if reviewer_pk == 0:

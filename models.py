@@ -64,7 +64,7 @@ class Model_Paper_Keywords(Base):
     paper_pk = Column(Integer, ForeignKey('papers.paper_pk'))#, index=True) # autoincrement = True
     model_name = Column(String(100))
     model_keywords_wo_pdf = Column(String(1000), default=None) # For all the papers, only abstract and title are used
-    model_keywords_w_pdf = Column(String(1000), default=None) # If a paper doesn't have pdf_text then it's abstract and title will be used
+    model_keywords_w_pdf = Column(String(1000), default=None) # If a paper doesn't have pdf_text then it's abstract and title will be used (if available)
     timestamp = Column(DateTime, default=datetime.datetime.utcnow) # 5:30 hours delay wrt India
 
     def __repr__(self):
@@ -77,7 +77,8 @@ class Model_Reviewer_Paper_Similarity(Base): # as of now this is only aimed for 
     reviewer_pk = Column(Integer, ForeignKey('rating.reviewer_pk'))#, index=True) # autoincrement = True
     paper_pk = Column(Integer, ForeignKey('rating.paper_pk'))#, index=True) # autoincrement = True
     model_name = Column(String(100))
-    model_similarity = Column(Float)
+    model_similarity_wo_pdf = Column(Float)
+    model_similarity_w_pdf = Column(Float)
     timestamp = Column(DateTime, default=datetime.datetime.utcnow) # 5:30 hours delay wrt India
 
     __table_args__ = (ForeignKeyConstraint([reviewer_pk, paper_pk], [Rating.reviewer_pk, Rating.paper_pk]),)
