@@ -22,7 +22,10 @@ def validity_check():
 
 # POST/CREATE:
 @app.post("/extract_keywords/{model_name}/")#, response_model=schemas.Item)
-def extract_keywords(model_name: str, skip: int = 0, limit: int = 5, db: Session = Depends(get_db)):
+def extract_keywords(model_name: str,
+                    skip: Annotated[int, Query(ge=0, le=3411)] = 0,
+                    limit: Annotated[int | None, Query(ge=0, description="If None, then calculates keywords for all papers, else calculates for provided range of papers")] = None,
+                    db: Session = Depends(get_db)):
     return crud.extract_papers_keywords(db, model_name=model_name, skip=skip, limit=limit)
 
 @app.post("/compute_similarity/{model_name}/")
@@ -41,15 +44,15 @@ def get_papers(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return items
 
 @app.get("/similarity/{model_name}")
-def get_similarity_values(model_name: str, \
-                        reviewer_pk: Annotated[int, Query(ge=0, le=58, description="0 to get all reviewer's data; [1,58] to get specific data")] = 0, \
-                        norm: Annotated[bool, Query(description="if True, does min-max normalization else no normalization")] = False, \
+def get_similarity_values(model_name: str,
+                        reviewer_pk: Annotated[int, Query(ge=0, le=58, description="0 to get all reviewer's data; [1,58] to get specific data")] = 0,
+                        norm: Annotated[bool, Query(description="if True, does min-max normalization else no normalization")] = False,
                         db: Session = Depends(get_db)):
     return crud.get_model_similarity_values(db, model_name=model_name, reviewer_pk=reviewer_pk, norm=norm)
 
 @app.get("/correlation/{model_name}")
-def get_correlation_values(model_name: str, \
-                        layout: Annotated[str, Query(description="'whole' to get correlation of all reviewers; 'by_reviewer' to get individual correlations")] = "whole", \
-                        norm: Annotated[bool, Query(description="if True, does min-max normalization else no normalization")] = False, \
+def get_correlation_values(model_name: str,
+                        layout: Annotated[str, Query(description="'whole' to get correlation of all reviewers; 'by_reviewer' to get individual correlations")] = "whole",
+                        norm: Annotated[bool, Query(description="if True, does min-max normalization else no normalization")] = False,
                         db: Session = Depends(get_db)):
     return crud.get_model_correlation_values(db, model_name=model_name, layout=layout, norm=norm)

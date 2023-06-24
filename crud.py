@@ -4,7 +4,7 @@ from keybert_model import keyword_from_paper
 from similarity_model import keyword_similarity
 from correlations import get_correlations
 import numpy as np
-from db import engine, sessionLocal
+# from db import engine, sessionLocal
 
 def json_maker(x):
     # this relies on the fact that our sequence contains chunks of similar numbers never repeating
@@ -29,8 +29,8 @@ def get_papers_by_id(db: Session, skip: int = 0, limit: int = 100):
 def get_reviewers_by_id(db: Session, skip: int = 0, limit: int = 20):
     return db.query(models.Reviewers).offset(skip).limit(limit).all()
 
-def extract_papers_keywords(db: Session, model_name: str, skip: int = 0, limit: int = 5):
-    if limit == -1: # extracting keywords from every paper
+def extract_papers_keywords(db: Session, model_name: str, skip: int = 0, limit: int | None = None):
+    if limit is None: # extracting keywords from every paper
         results = db.query(models.Papers).all()
     else:
         results = db.query(models.Papers).offset(skip).limit(limit).all()
@@ -39,22 +39,35 @@ def extract_papers_keywords(db: Session, model_name: str, skip: int = 0, limit: 
     for result in results:
         title = result.title
         abstract = result.abstract
+        pdf_text_path = result.pdf_text_path
+
         if isinstance(title, str):
-            title_keywords = keyword_from_paper(title)
+            title_keywords = keyword_from_paper(title, 'tit')
         else:
             title_keywords = []
 
         if isinstance(abstract, str):
-            abstract_keywords = keyword_from_paper(abstract)
+            abstract_keywords = keyword_from_paper(abstract, 'abs')
         else:
             abstract_keywords = []
+
+        if isinstance(pdf_text_path, str):
+            with open(pdf_text_path, "r", encoding="utf-8") as tf:
+                pdf_text = tf.read()
+            pdf_text_keywords = keyword_from_paper(pdf_text)
+        else:
+            pdf_text_keywords = []
         
-        fused_keywords = ";".join(abstract_keywords + title_keywords)
-        output[result.paper_pk] = fused_keywords
-        
-        kw = models.Model_Paper_Keywords(paper_pk=result.paper_pk, model_name=model_name, model_keywords=fused_keywords)
+        fused_keywords_wo_pdf = ";".join(abstract_keywords + title_keywords)
+        if pdf_text_keywords:
+            fused_keywords_w_pdf = ";".join(pdf_text_keywords)
+        else:
+            fused_keywords_w_pdf = fused_keywords_wo_pdf
+
+        kw = models.Model_Paper_Keywords(paper_pk=result.paper_pk, model_name=model_name, model_keywords_wo_pdf=fused_keywords_wo_pdf, model_keywords_w_pdf=fused_keywords_w_pdf)
         db.add(kw)
         db.commit()
+        output[result.paper_pk] = {"fused_keywords_wo_pdf": fused_keywords_wo_pdf, "fused_keywords_w_pdf": fused_keywords_w_pdf}
 
     return output
 

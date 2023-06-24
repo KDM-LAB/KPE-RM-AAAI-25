@@ -8,14 +8,15 @@ from db import engine, sessionLocal
 models.Base.metadata.create_all(bind=engine)
 db = sessionLocal()
 
-REVIEWERS_PARANT_DIR = ".\data\participants"
-PAPERS_PARANT_DIR = ".\data\papers"
-RATING_PATH = ".\data\evaluations.csv"
+REVIEWERS_PARENT_DIR = r".\data\participants"
+PAPERS_PARENT_DIR = r".\data\papers"
+RATING_PATH = r".\data\evaluations.csv"
+PDF_TEXT_DIR = r".\data\txts"
 
-reviewers_json = os.listdir(REVIEWERS_PARANT_DIR)
+reviewers_json = os.listdir(REVIEWERS_PARENT_DIR)
 
 for reveiwer in reviewers_json:
-    reveiwer_path = os.path.join(REVIEWERS_PARANT_DIR, reveiwer)
+    reveiwer_path = os.path.join(REVIEWERS_PARENT_DIR, reveiwer)
     with open(reveiwer_path, "r") as f:
         reveiwer_file = json.load(f)
         reviewer = models.Reviewers(author_id=reveiwer_file["authorId"], name=reveiwer_file["name"])
@@ -23,7 +24,7 @@ for reveiwer in reviewers_json:
         db.commit()
         db.refresh(reviewer)
         for published_paper in reveiwer_file["papers"]:
-            paper_path = os.path.join(PAPERS_PARANT_DIR, published_paper["paperId"]+".json")
+            paper_path = os.path.join(PAPERS_PARENT_DIR, published_paper["paperId"]+".json")
             with open(paper_path, "r") as pf:
                 paper_file = json.load(pf)
 
@@ -33,9 +34,12 @@ for reveiwer in reviewers_json:
                     db.add(reviewer_paper)
                     db.commit()
                     db.refresh(reviewer_paper)
-                    pass
                 else:
-                    paper = models.Papers(ssId=paper_file["ssId"], title=paper_file["title"], abstract=paper_file["abstract"], year=paper_file["year"], is_submitted=False)
+                    text_data_path = None
+                    paper_pdf_text_path = os.path.join(PDF_TEXT_DIR, published_paper["paperId"]+".txt")
+                    if os.path.exists(paper_pdf_text_path):
+                        text_data_path = paper_pdf_text_path
+                    paper = models.Papers(ssId=paper_file["ssId"], title=paper_file["title"], abstract=paper_file["abstract"], pdf_text_path=text_data_path, year=paper_file["year"], is_submitted=False)
                     db.add(paper)
                     db.commit()
                     db.refresh(paper)
@@ -53,10 +57,14 @@ for r in range(rating_data.shape[0]):
     for c in range(1, rating_data.shape[1]-10):
         submitted_paper = rating_data.iloc[r, c]
         if isinstance(submitted_paper, str):
-            submitted_paper_path = os.path.join(PAPERS_PARANT_DIR, submitted_paper+".json")
+            submitted_paper_path = os.path.join(PAPERS_PARENT_DIR, submitted_paper+".json")
             with open(submitted_paper_path, "r") as sf:
                 submitted_paper_file = json.load(sf)
-                paper = models.Papers(ssId=submitted_paper_file["ssId"], title=submitted_paper_file["title"], abstract=submitted_paper_file["abstract"], year=submitted_paper_file["year"], is_submitted=True)
+                text_data_path = None
+                paper_pdf_text_path = os.path.join(PDF_TEXT_DIR, submitted_paper+".txt")
+                if os.path.exists(paper_pdf_text_path):
+                    text_data_path = paper_pdf_text_path
+                paper = models.Papers(ssId=submitted_paper_file["ssId"], title=submitted_paper_file["title"], abstract=submitted_paper_file["abstract"], pdf_text_path=text_data_path, year=submitted_paper_file["year"], is_submitted=True)
                 db.add(paper)
                 db.commit()
                 db.refresh(paper)

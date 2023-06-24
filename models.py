@@ -19,8 +19,9 @@ class Papers(Base):
 
     paper_pk = Column(Integer, primary_key=True)#, index=True) # autoincrement = True
     ssId = Column(String(100))#, unique=True)#, index=True) # they will have 24 duplicates
-    title = Column(String(1000))
-    abstract = Column(String(10000))
+    title = Column(String(1000), default=None)
+    abstract = Column(String(10000), default=None)
+    pdf_text_path = Column(String(100), default=None) # Since PDF text is not getting stored even with Text/BLOB, I am storing only the path
     year = Column(Integer)
     is_submitted = Column(Boolean)
 
@@ -62,7 +63,8 @@ class Model_Paper_Keywords(Base):
     pk = Column(Integer, primary_key=True)#, index=True) # autoincrement = True
     paper_pk = Column(Integer, ForeignKey('papers.paper_pk'))#, index=True) # autoincrement = True
     model_name = Column(String(100))
-    model_keywords = Column(String(1000))
+    model_keywords_wo_pdf = Column(String(1000), default=None) # For all the papers, only abstract and title are used
+    model_keywords_w_pdf = Column(String(1000), default=None) # If a paper doesn't have pdf_text then it's abstract and title will be used
     timestamp = Column(DateTime, default=datetime.datetime.utcnow) # 5:30 hours delay wrt India
 
     def __repr__(self):
