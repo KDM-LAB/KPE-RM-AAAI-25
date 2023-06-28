@@ -85,7 +85,20 @@ class Model_Reviewer_Paper_Similarity(Base): # as of now this is only aimed for 
 
     def __repr__(self):
         return f"reviewer_pk: {self.reviewer_pk} || paper_pk: {self.paper_pk} || model_similarity: {self.model_similarity}"
-        
+
+# Stand-alone table to track POST method status and errors
+class Status_and_Error(Base):
+    __tablename__ = "status_and_error"
+
+    pk = Column(Integer, primary_key=True)
+    task = Column(String(100))
+    model_name = Column(String(100))
+    status = Column(String(100))
+    error = Column(String(100))
+
+    def __repr__(self):
+        return f"task: {self.task} || model_name: {self.model_name} || status: {self.status} || error: {self.error}"
+
 
 
 

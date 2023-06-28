@@ -1,27 +1,11 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import desc
 import models, schemas
 from keybert_model import keyword_from_paper
 from similarity_model import keyword_similarity
 from correlations import get_correlations
 import numpy as np
 # from db import engine, sessionLocal
-
-def json_maker(x):
-    # this relies on the fact that our sequence contains chunks of similar numbers never repeating
-    main_dict = {}
-    sub_dict = {}
-    initial_val = list(x.keys())[0][0]
-    for key, val in x.items():
-        if key[0] == initial_val:
-            sub_dict[key[1]] = val
-        else:
-            main_dict[initial_val] = sub_dict.copy()
-            sub_dict.clear()
-            sub_dict[key[1]] = val
-            initial_val = key[0]
-    main_dict[initial_val] = sub_dict
-
-    return main_dict
 
 def get_papers_by_id(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.Papers).offset(skip).limit(limit).all()
@@ -35,7 +19,6 @@ def extract_papers_keywords(db: Session, model_name: str, skip: int = 0, limit: 
     else:
         results = db.query(models.Papers).offset(skip).limit(limit).all()
 
-    output = {}
     for result in results:
         title = result.title
         abstract = result.abstract
@@ -67,16 +50,11 @@ def extract_papers_keywords(db: Session, model_name: str, skip: int = 0, limit: 
         kw = models.Model_Paper_Keywords(paper_pk=result.paper_pk, model_name=model_name, model_keywords_wo_pdf=fused_keywords_wo_pdf, model_keywords_w_pdf=fused_keywords_w_pdf)
         db.add(kw)
         db.commit()
-        output[result.paper_pk] = {"fused_keywords_wo_pdf": fused_keywords_wo_pdf, "fused_keywords_w_pdf": fused_keywords_w_pdf}
-
-    return output
 
 def compute_papers_similarity(db: Session, model_name: str):
     results = db.query(models.Rating.reviewer_pk, models.Rating.paper_pk).all()
     reviewer_cache = results[0].reviewer_pk # setting first reviewer
     past_papers_cache = db.query(models.Model_Paper_Keywords).join(models.Reviewers_Papers, models.Reviewers_Papers.paper_pk == models.Model_Paper_Keywords.paper_pk).filter((models.Reviewers_Papers.reviewer_pk == reviewer_cache) and (model.Model_Paper_Keywords.model_name == model_name)).all()
-    output_wo_pdf = {}
-    output_w_pdf = {}
     for result in results:
         reviewed_paper_data = db.query(models.Model_Paper_Keywords).filter(models.Model_Paper_Keywords.paper_pk == result.paper_pk).first()
         # Note: model_paper_keywords.model_keywords_w_pdf can be empty string if none of title, abstract or pdf_text are available
@@ -118,20 +96,17 @@ def compute_papers_similarity(db: Session, model_name: str):
         db.add(similarity)
         db.commit()
 
-        output_wo_pdf[(result.reviewer_pk, result.paper_pk)] = average_similarity_wo_pdf
-        output_w_pdf[(result.reviewer_pk, result.paper_pk)] = average_similarity_w_pdf
-
-    return {"similarity_wo_pdf":json_maker(output_wo_pdf), "similarity_w_pdf":json_maker(output_w_pdf)}
-
 def get_model_similarity_values(db: Session, model_name: str, reviewer_pk: int | None, norm: bool):
     if reviewer_pk is None:
         results = db.query(models.Rating.reviewer_pk, models.Rating.paper_pk, models.Rating.rating, models.Model_Reviewer_Paper_Similarity.model_similarity_wo_pdf, models.Model_Reviewer_Paper_Similarity.model_similarity_w_pdf) \
             .join(models.Model_Reviewer_Paper_Similarity, (models.Rating.reviewer_pk == models.Model_Reviewer_Paper_Similarity.reviewer_pk) & (models.Rating.paper_pk == models.Model_Reviewer_Paper_Similarity.paper_pk)) \
-            .filter(models.Model_Reviewer_Paper_Similarity.model_name == model_name).all()
+            .filter(models.Model_Reviewer_Paper_Similarity.model_name == model_name) \
+            .order_by(desc(models.Model_Reviewer_Paper_Similarity.model_similarity_wo_pdf)).all()
     else:
         results = db.query(models.Rating.reviewer_pk, models.Rating.paper_pk, models.Rating.rating, models.Model_Reviewer_Paper_Similarity.model_similarity_wo_pdf, models.Model_Reviewer_Paper_Similarity.model_similarity_w_pdf) \
             .join(models.Model_Reviewer_Paper_Similarity, (models.Rating.reviewer_pk == models.Model_Reviewer_Paper_Similarity.reviewer_pk) & (models.Rating.paper_pk == models.Model_Reviewer_Paper_Similarity.paper_pk)) \
-            .filter((models.Rating.reviewer_pk == reviewer_pk) & (models.Model_Reviewer_Paper_Similarity.model_name == model_name)).all()
+            .filter((models.Rating.reviewer_pk == reviewer_pk) & (models.Model_Reviewer_Paper_Similarity.model_name == model_name)) \
+            .order_by(desc(models.Model_Reviewer_Paper_Similarity.model_similarity_wo_pdf)).all()
 
     if norm:
         model_similarity_wo_pdf = []
