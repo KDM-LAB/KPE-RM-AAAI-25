@@ -7,13 +7,19 @@ from correlations import get_correlations
 import numpy as np
 # from db import engine, sessionLocal
 
-def get_papers_by_id(db: Session, skip: int = 0, limit: int = 100):
-    return db.query(models.Papers).offset(skip).limit(limit).all()
+def get_reviewers_by_id(db: Session, skip: int, limit: int | None):
+    if limit is None:
+        return db.query(models.Reviewers).all()
+    else:
+        return db.query(models.Reviewers).offset(skip).limit(limit).all()
 
-def get_reviewers_by_id(db: Session, skip: int = 0, limit: int = 20):
-    return db.query(models.Reviewers).offset(skip).limit(limit).all()
+def get_papers_by_id(db: Session, skip: int, limit: int | None):
+    if limit is None:
+        return db.query(models.Papers).all()
+    else:
+        return db.query(models.Papers).offset(skip).limit(limit).all()
 
-def extract_papers_keywords(db: Session, model_name: str, skip: int = 0, limit: int | None = None):
+def extract_papers_keywords(db: Session, model_name: str, skip: int, limit: int | None):
     if limit is None: # extracting keywords from every paper
         results = db.query(models.Papers).all()
     else:
@@ -51,8 +57,12 @@ def extract_papers_keywords(db: Session, model_name: str, skip: int = 0, limit: 
         db.add(kw)
         db.commit()
 
-def compute_papers_similarity(db: Session, model_name: str):
-    results = db.query(models.Rating.reviewer_pk, models.Rating.paper_pk).all()
+def compute_papers_similarity(db: Session, model_name: str, skip: int, limit: int | None):
+    if limit is None: # Computing similarity of every record
+        results = db.query(models.Rating.reviewer_pk, models.Rating.paper_pk).all()
+    else:
+        results = db.query(models.Rating.reviewer_pk, models.Rating.paper_pk).offset(skip).limit(limit).all()
+
     reviewer_cache = results[0].reviewer_pk # setting first reviewer
     past_papers_cache = db.query(models.Model_Paper_Keywords).join(models.Reviewers_Papers, models.Reviewers_Papers.paper_pk == models.Model_Paper_Keywords.paper_pk).filter((models.Reviewers_Papers.reviewer_pk == reviewer_cache) and (model.Model_Paper_Keywords.model_name == model_name)).all()
     for result in results:
@@ -95,6 +105,12 @@ def compute_papers_similarity(db: Session, model_name: str):
         similarity = models.Model_Reviewer_Paper_Similarity(reviewer_pk=result.reviewer_pk, paper_pk=result.paper_pk, model_name=model_name, model_similarity_wo_pdf=average_similarity_wo_pdf, model_similarity_w_pdf=average_similarity_w_pdf)
         db.add(similarity)
         db.commit()
+
+def get_model_extracted_keywords(db: Session, model_name: str, skip: int, limit: int | None):
+    if limit is None:
+        return db.query(models.Model_Paper_Keywords).filter(models.Model_Paper_Keywords.model_name == model_name).all()
+    else:
+        return db.query(models.Model_Paper_Keywords).offset(skip).limit(limit).filter(models.Model_Paper_Keywords.model_name == model_name).all()
 
 def get_model_similarity_values(db: Session, model_name: str, reviewer_pk: int | None, norm: bool):
     if reviewer_pk is None:

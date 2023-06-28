@@ -4,7 +4,6 @@ from db import engine, sessionLocal
 import models, schemas, crud
 from typing import Annotated
 from enum import Enum
-from fastapi.responses import JSONResponse
 
 # models.Base.metadata.create_all(bind=engine) # Not creating db here, creating in db_populate file
 
@@ -31,9 +30,9 @@ def check_extract_keywords(db, model_name, skip, limit, error):
         error.error = repr(e)
         db.commit()
 
-def check_compute_similarity(db, model_name, error):
+def check_compute_similarity(db, model_name, skip, limit, error):
     try:
-        crud.compute_papers_similarity(db=db, model_name=model_name)
+        crud.compute_papers_similarity(db=db, model_name=model_name, skip=skip, limit=limit)
     except Exception as e:
         error.error = repr(e)
         db.commit()
@@ -49,7 +48,7 @@ def validity_check():
 def extract_keywords(background_tasks: BackgroundTasks,
                     model_name: str,
                     skip: Annotated[int, Query(ge=0, le=3411)] = 0,
-                    limit: Annotated[int | None, Query(ge=0, description="If None, then calculates keywords for all papers, else calculates for provided range of papers")] = None,
+                    limit: Annotated[int | None, Query(ge=1, description="If None, then calculates keywords for all papers, else calculates for provided range of papers")] = None,
                     db: Session = Depends(get_db)):
     error = db.query(models.Status_and_Error).filter((models.Status_and_Error.task == "extract_keywords") & (models.Status_and_Error.model_name == model_name)).first()
     if error is None:
@@ -65,6 +64,8 @@ def extract_keywords(background_tasks: BackgroundTasks,
 @app.post("/compute_similarity/{model_name}/")
 def compute_similarity(background_tasks: BackgroundTasks,
                     model_name: str,
+                    skip: Annotated[int, Query(ge=0, le=476)] = 0,
+                    limit: Annotated[int | None, Query(ge=1, description="If None, then computes similarity for all records, else computes for provided range")] = None,
                     db: Session = Depends(get_db)):
     error = db.query(models.Status_and_Error).filter((models.Status_and_Error.task == "compute_similarity") & (models.Status_and_Error.model_name == model_name)).first()
     if error is None:
@@ -74,19 +75,30 @@ def compute_similarity(background_tasks: BackgroundTasks,
     else:
         error.error = "No Error as of now"
         db.commit()
-    background_tasks.add_task(check_compute_similarity, db=db, model_name=model_name, error=error)
+    background_tasks.add_task(check_compute_similarity, db=db, model_name=model_name, skip=skip, limit=limit, error=error)
     return {"message": f"Request for Similarity Computation for the given model '{model_name}' is accepted. Processing in the background. Hit 'status_and_error' endpoint to check status and potential errors"}
 
 # GET/READ:
 @app.get("/reviewers/")#, response_model=list[schemas.User])
-def get_reviewers(skip: int = 0, limit: int = 20, db: Session = Depends(get_db)):
+def get_reviewers(skip: Annotated[int, Query(ge=0, le=57)] = 0,
+                limit: Annotated[int | None, Query(ge=1, description="If None, then returns data for all reviewers, else returns data for the provided range")] = None,
+                db: Session = Depends(get_db)):
     users = crud.get_reviewers_by_id(db, skip=skip, limit=limit)
     return users
 
 @app.get("/papers/")#, response_model=list[schemas.Item])
-def get_papers(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def get_papers(skip: Annotated[int, Query(ge=0, le=3411)] = 0,
+            limit: Annotated[int | None, Query(ge=1, description="If None, then returns data for all papers, else returns data for the provided range")] = None,
+            db: Session = Depends(get_db)):
     items = crud.get_papers_by_id(db, skip=skip, limit=limit)
     return items
+
+@app.get("/keywords/{model_name}")
+def get_extracted_keywords(model_name: str,
+                        skip: Annotated[int, Query(ge=0, le=3411)] = 0,
+                        limit: Annotated[int | None, Query(ge=1, description="If None, then returns data for all records, else returns data for the provided range")] = None,
+                        db: Session = Depends(get_db)):
+    return crud.get_model_extracted_keywords(db, model_name=model_name, skip=skip, limit=limit)
 
 @app.get("/similarity/{model_name}")
 def get_similarity_values(model_name: str,
