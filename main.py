@@ -4,6 +4,7 @@ from db import engine, sessionLocal
 import models, schemas, crud
 from typing import Annotated
 from enum import Enum
+from sqlalchemy import func
 
 # models.Base.metadata.create_all(bind=engine) # Not creating db here, creating in db_populate file
 
@@ -25,17 +26,32 @@ class LayoutEnum(str, Enum):
 ## Check error functions for POST endpoints:
 def check_extract_keywords(db, model_name, skip, limit, error):
     try:
+        result = db.query(models.Status_and_Error).filter((models.Status_and_Error.task == 'extract_keywords') and (models.Status_and_Error.model_name == model_name)).first()
+        result.status = "processing"
+        db.commit()
         crud.extract_papers_keywords(db=db, model_name=model_name, skip=skip, limit=limit)
     except Exception as e:
         error.error = repr(e)
         db.commit()
+    finally:
+        result = db.query(models.Status_and_Error).filter((models.Status_and_Error.task == 'extract_keywords') and (models.Status_and_Error.model_name == model_name)).first()
+        result.status = "clear"
+        db.commit()
 
 def check_compute_similarity(db, model_name, skip, limit, error):
     try:
+        result = db.query(models.Status_and_Error).filter((models.Status_and_Error.task == 'compute_similarity') and (models.Status_and_Error.model_name == model_name)).first()
+        result.status = "processing"
+        db.commit()
         crud.compute_papers_similarity(db=db, model_name=model_name, skip=skip, limit=limit)
     except Exception as e:
         error.error = repr(e)
         db.commit()
+    finally:
+        result = db.query(models.Status_and_Error).filter((models.Status_and_Error.task == 'compute_similarity') and (models.Status_and_Error.model_name == model_name)).first()
+        result.status = "clear"
+        db.commit()
+
 
 ## Endpoints:
 # HOME:
@@ -51,6 +67,7 @@ def extract_keywords(background_tasks: BackgroundTasks,
                     limit: Annotated[int | None, Query(ge=1, description="If None, then calculates keywords for all papers, else calculates for provided range of papers")] = None,
                     db: Session = Depends(get_db)):
     error = db.query(models.Status_and_Error).filter((models.Status_and_Error.task == "extract_keywords") & (models.Status_and_Error.model_name == model_name)).first()
+
     if error is None:
         record = models.Status_and_Error(task="extract_keywords", model_name=model_name, status="clear", error="No Error")
         db.add(record)
@@ -58,8 +75,18 @@ def extract_keywords(background_tasks: BackgroundTasks,
     else:
         error.error = "No Error as of now"
         db.commit()
-    background_tasks.add_task(check_extract_keywords, db=db, model_name=model_name, skip=skip, limit=limit, error=error)
-    return {"message": f"Request for Keyword Extraction for the given model '{model_name}' is accepted. Processing in the background. Hit 'status_and_error' endpoint to check status and potential errors"}
+
+    last_paper_pk = db.query(func.max(models.Model_Paper_Keywords.paper_pk)).filter(models.Model_Paper_Keywords.model_name == model_name).first()[0]
+    status = db.query(models.Status_and_Error.status).filter((models.Status_and_Error.task == 'extract_keywords') and (models.Status_and_Error.model_name == model_name)).first()[0]
+
+    if status == "clear":
+        if last_paper_pk != 3412:
+            if (last_paper_pk is None) or ((last_paper_pk == skip) and (limit is not None)):
+                background_tasks.add_task(check_extract_keywords, db=db, model_name=model_name, skip=skip, limit=limit, error=error)
+                return {"message": f"Request for Keyword Extraction for the given model '{model_name}' is accepted. Processing in the background. Hit 'status_and_error' endpoint to check status and potential errors."}
+            return {"message": f"The last processed paper_pk in the database is {last_paper_pk}, please hit the endpoint again with a skip of {last_paper_pk} and a limit of any positive integer, don't keep it None."}
+        return {"message": f"Keywords for all the papers have already been extracted for the given model '{model_name}'"}
+    return {"message": f"Keywords extraction for the given model '{model_name}' is already in process for the previous request, please hit 'status_and_error' endpoint to check status."}
 
 @app.post("/compute_similarity/{model_name}/")
 def compute_similarity(background_tasks: BackgroundTasks,
@@ -68,6 +95,7 @@ def compute_similarity(background_tasks: BackgroundTasks,
                     limit: Annotated[int | None, Query(ge=1, description="If None, then computes similarity for all records, else computes for provided range")] = None,
                     db: Session = Depends(get_db)):
     error = db.query(models.Status_and_Error).filter((models.Status_and_Error.task == "compute_similarity") & (models.Status_and_Error.model_name == model_name)).first()
+    
     if error is None:
         record = models.Status_and_Error(task="compute_similarity", model_name=model_name, status="clear", error="No Error")
         db.add(record)
@@ -75,8 +103,19 @@ def compute_similarity(background_tasks: BackgroundTasks,
     else:
         error.error = "No Error as of now"
         db.commit()
-    background_tasks.add_task(check_compute_similarity, db=db, model_name=model_name, skip=skip, limit=limit, error=error)
-    return {"message": f"Request for Similarity Computation for the given model '{model_name}' is accepted. Processing in the background. Hit 'status_and_error' endpoint to check status and potential errors"}
+
+    last_record = len(db.query(models.Model_Reviewer_Paper_Similarity.paper_pk).filter(models.Model_Reviewer_Paper_Similarity.model_name == model_name).all())
+    last_paper_pk = db.query(func.max(models.Model_Reviewer_Paper_Similarity.paper_pk)).filter(models.Model_Reviewer_Paper_Similarity.model_name == model_name).first()[0]
+    status = db.query(models.Status_and_Error.status).filter((models.Status_and_Error.task == 'compute_similarity') and (models.Status_and_Error.model_name == model_name)).first()[0]
+    
+    if status == "clear":
+        if last_paper_pk != 3412: # Here also the last record has paper_pk of 3412 (and it's the only one no duplicate) so we can use it
+            if (last_record is None) or ((last_record == skip) and (limit is not None)):
+                background_tasks.add_task(check_compute_similarity, db=db, model_name=model_name, skip=skip, limit=limit, error=error)
+                return {"message": f"Request for Similarity Computation for the given model '{model_name}' is accepted. Processing in the background. Hit 'status_and_error' endpoint to check status and potential errors"}
+            return {"message": f"The last processed record in the database is {last_record}, please hit the endpoint again with a skip of {last_record} and a limit of any positive integer, don't keep it None."}
+        return {"message": f"Similarity for all the records have already been computed for the given model '{model_name}'"}
+    return {"message": f"Similarity computation for the given model '{model_name}' is already in process for the previous request, please hit 'status_and_error' endpoint to check status."}
 
 # GET/READ:
 @app.get("/reviewers/")#, response_model=list[schemas.User])
