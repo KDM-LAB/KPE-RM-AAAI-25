@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
+from sqlalchemy import desc, distinct
 import models, schemas
 from keybert_model import keyword_from_paper
 from similarity_models import similarity_dict
@@ -20,6 +20,9 @@ def get_papers_by_id(db: Session, skip: int, limit: int | None):
         return db.query(models.Papers).offset(skip).limit(limit).all()
 
 def extract_papers_keywords(db: Session, model_name: str, skip: int, limit: int | None):
+    # if similarity_name not in list(similarity_dict.keys()):
+    #     raise ValueError(f"Given similarity_name does not exist, insert any of the following: {list(similarity_dict.keys())}")
+
     if limit is None: # extracting keywords from every paper
         results = db.query(models.Papers).all()
     else:
@@ -61,6 +64,13 @@ def compute_papers_similarity(db: Session, model_name: str, similarity_name: str
     if similarity_name not in list(similarity_dict.keys()):
         raise ValueError(f"Given similarity_name does not exist, insert any of the following: {list(similarity_dict.keys())}")
 
+    available_models = db.query(models.Model_Paper_Keywords.model_name).distinct().all()
+    for item in available_models:
+        if model_name == item[0]:
+            break
+    else:
+        raise ValueError(f"Given model_name does not have it's keywords computed, insert any of the following: {available_models}")
+
     if limit is None: # Computing similarity of every record
         results = db.query(models.Rating.reviewer_pk, models.Rating.paper_pk).all()
     else:
@@ -68,11 +78,6 @@ def compute_papers_similarity(db: Session, model_name: str, similarity_name: str
 
     reviewer_cache = results[0].reviewer_pk # setting first reviewer
     past_papers_cache = db.query(models.Model_Paper_Keywords).join(models.Reviewers_Papers, models.Reviewers_Papers.paper_pk == models.Model_Paper_Keywords.paper_pk).filter((models.Reviewers_Papers.reviewer_pk == reviewer_cache) & (models.Model_Paper_Keywords.model_name == model_name)).all()
-
-    # CHANGE THIS CHECK WITH THAT OF LIKE SIMILARITY CHECK ONCE MODEL_DICT IS CREATED!!!
-    if not past_papers_cache:
-        raise ValueError(f"Given model_name does not exist in keywords table")
-
     for result in results:
         reviewed_paper_data = db.query(models.Model_Paper_Keywords).filter(models.Model_Paper_Keywords.paper_pk == result.paper_pk).first()
         # Note: model_paper_keywords.model_keywords_w_pdf can be empty string if none of title, abstract or pdf_text are available
@@ -115,12 +120,26 @@ def compute_papers_similarity(db: Session, model_name: str, similarity_name: str
         db.commit()
 
 def get_model_extracted_keywords(db: Session, model_name: str, skip: int, limit: int | None):
+    available_options = db.query(models.Model_Paper_Keywords.model_name).distinct().all()
+    for item in available_options:
+        if model_name == item[0]:
+            break
+    else:
+        return {"message":f"available options are {available_options}, choose any from them."}
+
     if limit is None:
         return db.query(models.Model_Paper_Keywords).filter(models.Model_Paper_Keywords.model_name == model_name).all()
     else:
         return db.query(models.Model_Paper_Keywords).offset(skip).limit(limit).filter(models.Model_Paper_Keywords.model_name == model_name).all()
 
 def get_model_similarity_values(db: Session, model_name: str, similarity_name: str, reviewer_pk: int | None, norm: bool):
+    available_options = db.query(models.Model_Reviewer_Paper_Similarity.model_name, models.Model_Reviewer_Paper_Similarity.similarity_name).distinct().all()
+    for item in available_options:
+        if (model_name == item[0]) and (similarity_name == item[1]):
+            break
+    else:
+        return {"message":f"available options are {available_options}, choose any from them."}
+
     if reviewer_pk is None:
         results = db.query(models.Rating.reviewer_pk, models.Rating.paper_pk, models.Rating.rating, models.Model_Reviewer_Paper_Similarity.model_similarity_wo_pdf, models.Model_Reviewer_Paper_Similarity.model_similarity_w_pdf) \
             .join(models.Model_Reviewer_Paper_Similarity, (models.Rating.reviewer_pk == models.Model_Reviewer_Paper_Similarity.reviewer_pk) & (models.Rating.paper_pk == models.Model_Reviewer_Paper_Similarity.paper_pk)) \
@@ -157,6 +176,13 @@ def get_model_similarity_values(db: Session, model_name: str, similarity_name: s
             for idx, result in enumerate(results)]
 
 def get_model_correlation_values(db: Session, model_name: str, similarity_name: str, layout: str, norm: bool):
+    available_options = db.query(models.Model_Reviewer_Paper_Similarity.model_name, models.Model_Reviewer_Paper_Similarity.similarity_name).distinct().all()
+    for item in available_options:
+        if (model_name == item[0]) and (similarity_name == item[1]):
+            break
+    else:
+        return {"message":f"available options are {available_options}, choose any from them."}
+
     if layout == "whole":
         output = get_model_similarity_values(db=db, model_name=model_name, similarity_name=similarity_name, reviewer_pk=None, norm=norm)
         rating = [row["Rating"] for row in output]
@@ -179,5 +205,3 @@ def get_model_correlation_values(db: Session, model_name: str, similarity_name: 
 
     else:
         raise Exception("Unknown format, enter either 'whole' or 'by_reviewer'")
-
-
