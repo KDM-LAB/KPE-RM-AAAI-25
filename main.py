@@ -26,30 +26,26 @@ class LayoutEnum(str, Enum):
 ## Check error functions for POST endpoints:
 def check_extract_keywords(db, model_name, skip, limit, error):
     try:
-        result = db.query(models.Status_and_Error).filter((models.Status_and_Error.task == 'extract_keywords') & (models.Status_and_Error.model_name == model_name)).first()
-        result.status = "processing"
+        error.status = "processing"
         db.commit()
         crud.extract_papers_keywords(db=db, model_name=model_name, skip=skip, limit=limit)
     except Exception as e:
         error.error = repr(e)
         db.commit()
     finally:
-        result = db.query(models.Status_and_Error).filter((models.Status_and_Error.task == 'extract_keywords') & (models.Status_and_Error.model_name == model_name)).first()
-        result.status = "clear"
+        error.status = "clear"
         db.commit()
 
-def check_compute_similarity(db, model_name, skip, limit, error):
+def check_compute_similarity(db, model_name, similarity_name, skip, limit, error):
     try:
-        result = db.query(models.Status_and_Error).filter((models.Status_and_Error.task == 'compute_similarity') & (models.Status_and_Error.model_name == model_name)).first()
-        result.status = "processing"
+        error.status = "processing"
         db.commit()
-        crud.compute_papers_similarity(db=db, model_name=model_name, skip=skip, limit=limit)
+        crud.compute_papers_similarity(db=db, model_name=model_name, similarity_name=similarity_name, skip=skip, limit=limit)
     except Exception as e:
         error.error = repr(e)
         db.commit()
     finally:
-        result = db.query(models.Status_and_Error).filter((models.Status_and_Error.task == 'compute_similarity') & (models.Status_and_Error.model_name == model_name)).first()
-        result.status = "clear"
+        error.status = "clear"
         db.commit()
 
 
@@ -60,7 +56,7 @@ def validity_check():
     return {"works":"fine"}
 
 # POST/CREATE:
-@app.post("/extract_keywords/{model_name}/")#, response_model=schemas.Item)
+@app.post("/extract_keywords/{model_name}")#, response_model=schemas.Item)
 def extract_keywords(background_tasks: BackgroundTasks,
                     model_name: str,
                     skip: Annotated[int, Query(ge=0, le=3411)] = 0,
@@ -89,35 +85,36 @@ def extract_keywords(background_tasks: BackgroundTasks,
         return {"message": f"Keywords for all the papers have already been extracted for the given model '{model_name}'"}
     return {"message": f"Keywords extraction for the given model '{model_name}' is already in process for the previous request, please hit 'status_and_error' endpoint to check status."}
 
-@app.post("/compute_similarity/{model_name}/")
+@app.post("/compute_similarity/{model_name}/{similarity_name}")
 def compute_similarity(background_tasks: BackgroundTasks,
                     model_name: str,
+                    similarity_name: str,
                     skip: Annotated[int, Query(ge=0, le=476)] = 0,
                     limit: Annotated[int | None, Query(ge=1, description="If None, then computes similarity for all records, else computes for provided range")] = None,
                     db: Session = Depends(get_db)):
-    error = db.query(models.Status_and_Error).filter((models.Status_and_Error.task == "compute_similarity") & (models.Status_and_Error.model_name == model_name)).first()
+    error = db.query(models.Status_and_Error).filter((models.Status_and_Error.task == "compute_similarity") & (models.Status_and_Error.model_name == model_name) & (models.Status_and_Error.similarity_name == similarity_name)).first()
     
     if error is None:
-        record = models.Status_and_Error(task="compute_similarity", model_name=model_name, status="clear", error="No Error as of now")
+        record = models.Status_and_Error(task="compute_similarity", model_name=model_name, similarity_name=similarity_name, status="clear", error="No Error as of now")
         db.add(record)
         db.commit()
-        error = db.query(models.Status_and_Error).filter((models.Status_and_Error.task == "compute_similarity") & (models.Status_and_Error.model_name == model_name)).first()
+        error = db.query(models.Status_and_Error).filter((models.Status_and_Error.task == "compute_similarity") & (models.Status_and_Error.model_name == model_name) & (models.Status_and_Error.similarity_name == similarity_name)).first()
     else:
         error.error = "No Error as of now"
         db.commit()
 
-    last_record = len(db.query(models.Model_Reviewer_Paper_Similarity.paper_pk).filter(models.Model_Reviewer_Paper_Similarity.model_name == model_name).all())
-    last_paper_pk = db.query(func.max(models.Model_Reviewer_Paper_Similarity.paper_pk)).filter(models.Model_Reviewer_Paper_Similarity.model_name == model_name).first()[0]
-    status = db.query(models.Status_and_Error.status).filter((models.Status_and_Error.task == 'compute_similarity') & (models.Status_and_Error.model_name == model_name)).first()[0]
+    last_record = len(db.query(models.Model_Reviewer_Paper_Similarity.paper_pk).filter((models.Model_Reviewer_Paper_Similarity.model_name == model_name) & (models.Model_Reviewer_Paper_Similarity.similarity_name == similarity_name)).all())
+    last_paper_pk = db.query(func.max(models.Model_Reviewer_Paper_Similarity.paper_pk)).filter((models.Model_Reviewer_Paper_Similarity.model_name == model_name) & (models.Model_Reviewer_Paper_Similarity.similarity_name == similarity_name)).first()[0]
+    status = db.query(models.Status_and_Error.status).filter((models.Status_and_Error.task == 'compute_similarity') & (models.Status_and_Error.model_name == model_name) & (models.Status_and_Error.similarity_name == similarity_name)).first()[0]
     
     if status == "clear":
         if last_paper_pk != 3412: # Here also the last record has paper_pk of 3412 (and it's the only one no duplicate) so we can use it
             if (last_paper_pk is None) or ((last_record == skip) and (limit is not None)):
-                background_tasks.add_task(check_compute_similarity, db=db, model_name=model_name, skip=skip, limit=limit, error=error)
-                return {"message": f"Request for Similarity Computation for the given model '{model_name}' is accepted. Processing in the background. Hit 'status_and_error' endpoint to check status and potential errors"}
+                background_tasks.add_task(check_compute_similarity, db=db, model_name=model_name, similarity_name=similarity_name, skip=skip, limit=limit, error=error)
+                return {"message": f"Request for Similarity Computation for the given model '{model_name}' and similarity '{similarity_name}' is accepted. Processing in the background. Hit 'status_and_error' endpoint to check status and potential errors"}
             return {"message": f"The last processed record in the database is {last_record}, please hit the endpoint again with a skip of {last_record} and a limit of any positive integer, don't keep it None."}
-        return {"message": f"Similarity for all the records have already been computed for the given model '{model_name}'"}
-    return {"message": f"Similarity computation for the given model '{model_name}' is already in process for the previous request, please hit 'status_and_error' endpoint to check status."}
+        return {"message": f"Similarity for all the records have already been computed for the given model '{model_name}' and similarity '{similarity_name}'"}
+    return {"message": f"Similarity computation for the given model '{model_name}' and similarity '{similarity_name}' is already in process for the previous request, please hit 'status_and_error' endpoint to check status."}
 
 # GET/READ:
 @app.get("/reviewers/")#, response_model=list[schemas.User])
@@ -141,19 +138,21 @@ def get_extracted_keywords(model_name: str,
                         db: Session = Depends(get_db)):
     return crud.get_model_extracted_keywords(db, model_name=model_name, skip=skip, limit=limit)
 
-@app.get("/similarity/{model_name}")
+@app.get("/similarity/{model_name}/{similarity_name}")
 def get_similarity_values(model_name: str,
+                        similarity_name: str,
                         reviewer_pk: Annotated[int | None, Query(ge=1, le=58, description="[1,58] to get specific data; else get all data by default")] = None,
                         norm: Annotated[bool, Query(description="if True, does min-max normalization else no normalization")] = False,
                         db: Session = Depends(get_db)):
-    return crud.get_model_similarity_values(db, model_name=model_name, reviewer_pk=reviewer_pk, norm=norm)
+    return crud.get_model_similarity_values(db, model_name=model_name, similarity_name=similarity_name, reviewer_pk=reviewer_pk, norm=norm)
 
-@app.get("/correlation/{model_name}")
+@app.get("/correlation/{model_name}/{similarity_name}")
 def get_correlation_values(model_name: str,
+                        similarity_name: str,
                         layout: Annotated[LayoutEnum, Query(description="'whole': to get correlation of all reviewers; 'by_reviewer': to get individual correlations")] = LayoutEnum.whole,
                         norm: Annotated[bool, Query(description="if True, does min-max normalization else no normalization")] = False,
                         db: Session = Depends(get_db)):
-    return crud.get_model_correlation_values(db, model_name=model_name, layout=layout, norm=norm)
+    return crud.get_model_correlation_values(db, model_name=model_name, similarity_name=similarity_name, layout=layout, norm=norm)
 
 @app.get("/status_and_error/")
 def get_status_and_error_messages(db: Session = Depends(get_db)):

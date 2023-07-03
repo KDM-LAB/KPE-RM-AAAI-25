@@ -77,6 +77,7 @@ class Model_Reviewer_Paper_Similarity(Base): # as of now this is only aimed for 
     reviewer_pk = Column(Integer, ForeignKey('rating.reviewer_pk'))#, index=True) # autoincrement = True
     paper_pk = Column(Integer, ForeignKey('rating.paper_pk'))#, index=True) # autoincrement = True
     model_name = Column(String(100))
+    similarity_name = Column(String(100))
     model_similarity_wo_pdf = Column(Float)
     model_similarity_w_pdf = Column(Float)
     timestamp = Column(DateTime, default=datetime.datetime.utcnow) # 5:30 hours delay wrt India
@@ -93,48 +94,10 @@ class Status_and_Error(Base):
     pk = Column(Integer, primary_key=True)
     task = Column(String(100))
     model_name = Column(String(100))
+    similarity_name = Column(String(100))
     status = Column(String(100))
-    error = Column(String(100))
+    error = Column(String(500))
 
     def __repr__(self):
         return f"task: {self.task} || model_name: {self.model_name} || status: {self.status} || error: {self.error}"
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# class User(Base):
-#     __tablename__ = "users"
-
-#     user_id = Column(Integer, primary_key=True, index=True) # autoincrement = True
-#     email = Column(String(100), unique=True, index=True)
-#     hashed_password = Column(String(100))
-#     is_active = Column(Boolean, default=True)
-
-#     items = relationship("Item", back_populates="owner")
-
-#     def __repr__(self):
-#         return f"user_id: {self.user_id} || user_email: {self.email}"
-
-# class Item(Base):
-#     __tablename__ = "items"
-
-#     item_id = Column(Integer, primary_key=True, index=True)
-#     title = Column(String(50), index=True)
-#     description = Column(String(200), index=True)
-#     owner_id = Column(Integer, ForeignKey("users.user_id"))
-
-#     owner = relationship("User", back_populates="items")
-
-#     def __repr__(self):
-#         return f"item_id: {self.item_id} || item_title: {self.title}"

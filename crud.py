@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc
 import models, schemas
 from keybert_model import keyword_from_paper
-from similarity_model import mean_of_mean_similarity
+from similarity_models import similarity_dict
 from correlations import get_correlations
 import numpy as np
 # from db import engine, sessionLocal
@@ -57,7 +57,10 @@ def extract_papers_keywords(db: Session, model_name: str, skip: int, limit: int 
         db.add(kw)
         db.commit()
 
-def compute_papers_similarity(db: Session, model_name: str, skip: int, limit: int | None):
+def compute_papers_similarity(db: Session, model_name: str, similarity_name: str, skip: int, limit: int | None):
+    if similarity_name not in list(similarity_dict.keys()):
+        raise ValueError(f"Given similarity_name does not exist, insert any of the following: {list(similarity_dict.keys())}")
+
     if limit is None: # Computing similarity of every record
         results = db.query(models.Rating.reviewer_pk, models.Rating.paper_pk).all()
     else:
@@ -65,6 +68,11 @@ def compute_papers_similarity(db: Session, model_name: str, skip: int, limit: in
 
     reviewer_cache = results[0].reviewer_pk # setting first reviewer
     past_papers_cache = db.query(models.Model_Paper_Keywords).join(models.Reviewers_Papers, models.Reviewers_Papers.paper_pk == models.Model_Paper_Keywords.paper_pk).filter((models.Reviewers_Papers.reviewer_pk == reviewer_cache) & (models.Model_Paper_Keywords.model_name == model_name)).all()
+
+    # CHANGE THIS CHECK WITH THAT OF LIKE SIMILARITY CHECK ONCE MODEL_DICT IS CREATED!!!
+    if not past_papers_cache:
+        raise ValueError(f"Given model_name does not exist in keywords table")
+
     for result in results:
         reviewed_paper_data = db.query(models.Model_Paper_Keywords).filter(models.Model_Paper_Keywords.paper_pk == result.paper_pk).first()
         # Note: model_paper_keywords.model_keywords_w_pdf can be empty string if none of title, abstract or pdf_text are available
@@ -80,7 +88,7 @@ def compute_papers_similarity(db: Session, model_name: str, skip: int, limit: in
             similarity_wo_pdf, terms_wo_pdf = 0, 0
             for past_paper in past_papers_data:
                 if past_paper.model_keywords_wo_pdf:
-                    similarity_wo_pdf += mean_of_mean_similarity(past_paper.model_keywords_wo_pdf, reviewed_paper_data.model_keywords_wo_pdf)
+                    similarity_wo_pdf += similarity_dict[similarity_name](past_paper.model_keywords_wo_pdf, reviewed_paper_data.model_keywords_wo_pdf)
                     terms_wo_pdf += 1
             if similarity_wo_pdf == 0:
                 average_similarity_wo_pdf = None # can't make it zero, cause then it can be infered as the model giving a similarity of 0 instead of data inavailability
@@ -93,7 +101,7 @@ def compute_papers_similarity(db: Session, model_name: str, skip: int, limit: in
             similarity_w_pdf, terms_w_pdf = 0, 0
             for past_paper in past_papers_data:
                 if past_paper.model_keywords_w_pdf:
-                    similarity_w_pdf += mean_of_mean_similarity(past_paper.model_keywords_w_pdf, reviewed_paper_data.model_keywords_w_pdf)
+                    similarity_w_pdf += similarity_dict[similarity_name](past_paper.model_keywords_w_pdf, reviewed_paper_data.model_keywords_w_pdf)
                     terms_w_pdf += 1
             if similarity_w_pdf == 0:
                 average_similarity_w_pdf = None # can't make it zero, cause then it can be infered as the model giving a similarity of 0 instead of data inavailability
@@ -102,7 +110,7 @@ def compute_papers_similarity(db: Session, model_name: str, skip: int, limit: in
         else:
             average_similarity_w_pdf = None # can't make it zero, cause then it can be infered as the model giving a similarity of 0 instead of data inavailability
         
-        similarity = models.Model_Reviewer_Paper_Similarity(reviewer_pk=result.reviewer_pk, paper_pk=result.paper_pk, model_name=model_name, model_similarity_wo_pdf=average_similarity_wo_pdf, model_similarity_w_pdf=average_similarity_w_pdf)
+        similarity = models.Model_Reviewer_Paper_Similarity(reviewer_pk=result.reviewer_pk, paper_pk=result.paper_pk, model_name=model_name, similarity_name=similarity_name, model_similarity_wo_pdf=average_similarity_wo_pdf, model_similarity_w_pdf=average_similarity_w_pdf)
         db.add(similarity)
         db.commit()
 
@@ -112,16 +120,16 @@ def get_model_extracted_keywords(db: Session, model_name: str, skip: int, limit:
     else:
         return db.query(models.Model_Paper_Keywords).offset(skip).limit(limit).filter(models.Model_Paper_Keywords.model_name == model_name).all()
 
-def get_model_similarity_values(db: Session, model_name: str, reviewer_pk: int | None, norm: bool):
+def get_model_similarity_values(db: Session, model_name: str, similarity_name: str, reviewer_pk: int | None, norm: bool):
     if reviewer_pk is None:
         results = db.query(models.Rating.reviewer_pk, models.Rating.paper_pk, models.Rating.rating, models.Model_Reviewer_Paper_Similarity.model_similarity_wo_pdf, models.Model_Reviewer_Paper_Similarity.model_similarity_w_pdf) \
             .join(models.Model_Reviewer_Paper_Similarity, (models.Rating.reviewer_pk == models.Model_Reviewer_Paper_Similarity.reviewer_pk) & (models.Rating.paper_pk == models.Model_Reviewer_Paper_Similarity.paper_pk)) \
-            .filter(models.Model_Reviewer_Paper_Similarity.model_name == model_name) \
+            .filter((models.Model_Reviewer_Paper_Similarity.model_name == model_name) & (models.Model_Reviewer_Paper_Similarity.similarity_name == similarity_name)) \
             .order_by(desc(models.Model_Reviewer_Paper_Similarity.model_similarity_wo_pdf)).all()
     else:
         results = db.query(models.Rating.reviewer_pk, models.Rating.paper_pk, models.Rating.rating, models.Model_Reviewer_Paper_Similarity.model_similarity_wo_pdf, models.Model_Reviewer_Paper_Similarity.model_similarity_w_pdf) \
             .join(models.Model_Reviewer_Paper_Similarity, (models.Rating.reviewer_pk == models.Model_Reviewer_Paper_Similarity.reviewer_pk) & (models.Rating.paper_pk == models.Model_Reviewer_Paper_Similarity.paper_pk)) \
-            .filter((models.Rating.reviewer_pk == reviewer_pk) & (models.Model_Reviewer_Paper_Similarity.model_name == model_name)) \
+            .filter((models.Rating.reviewer_pk == reviewer_pk) & (models.Model_Reviewer_Paper_Similarity.model_name == model_name) & (models.Model_Reviewer_Paper_Similarity.similarity_name == similarity_name)) \
             .order_by(desc(models.Model_Reviewer_Paper_Similarity.model_similarity_wo_pdf)).all()
 
     if norm:
@@ -148,9 +156,9 @@ def get_model_similarity_values(db: Session, model_name: str, reviewer_pk: int |
             "Model_Similarity_w_pdf":round(model_similarity_w_pdf[idx], 2)}
             for idx, result in enumerate(results)]
 
-def get_model_correlation_values(db: Session, model_name: str, layout: str, norm: bool):
+def get_model_correlation_values(db: Session, model_name: str, similarity_name: str, layout: str, norm: bool):
     if layout == "whole":
-        output = get_model_similarity_values(db=db, model_name=model_name, reviewer_pk=None, norm=norm)
+        output = get_model_similarity_values(db=db, model_name=model_name, similarity_name=similarity_name, reviewer_pk=None, norm=norm)
         rating = [row["Rating"] for row in output]
         model_similarity_wo_pdf = [row["Model_Similarity_wo_pdf"] for row in output]
         model_similarity_w_pdf = [row["Model_Similarity_w_pdf"] for row in output]
@@ -160,7 +168,7 @@ def get_model_correlation_values(db: Session, model_name: str, layout: str, norm
     elif layout == "by_reviewer":
         return_result = {}
         for idx in range(1,59,1):
-            output = get_model_similarity_values(db=db, model_name=model_name, reviewer_pk=idx, norm=norm)
+            output = get_model_similarity_values(db=db, model_name=model_name, similarity_name=similarity_name, reviewer_pk=idx, norm=norm)
             rating = [row["Rating"] for row in output]
             model_similarity_wo_pdf = [row["Model_Similarity_wo_pdf"] for row in output]
             model_similarity_w_pdf = [row["Model_Similarity_w_pdf"] for row in output]

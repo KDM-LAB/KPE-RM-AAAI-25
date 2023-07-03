@@ -74,9 +74,9 @@ def camm_vector_representation(keyphrases: str) -> np.ndarray:
     single_keywords_vector.extend(multi_keywords_vector)
     return single_keywords_vector
 
-def CA_mean_of_mean_similarity(text1: str, text2: str) -> float:
+def ca_mean_of_mean_similarity(text1: str, text2: str) -> float:
     """
-    CA stands for Cross Attention.
+    ca stands for Cross Attention.
     It's named so because the operation done before computing mean is similar to cross attention.
     It's an experimental feature, I'm not sure if it's used anywhere else.
     """
@@ -88,3 +88,6 @@ def CA_mean_of_mean_similarity(text1: str, text2: str) -> float:
             total_similarity += cosine_similarity(x, y)
     return round((total_similarity / (len(vec1) * len(vec2) + epsilon)) * 5, 2)
 
+
+similarity_dict = {"mean_of_mean":mean_of_mean_similarity,
+                "ca_mean_of_mean":ca_mean_of_mean_similarity}
