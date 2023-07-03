@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc
 import models, schemas
 from keybert_model import keyword_from_paper
-from similarity_model import keyword_similarity
+from similarity_model import mean_of_mean_similarity
 from correlations import get_correlations
 import numpy as np
 # from db import engine, sessionLocal
@@ -64,7 +64,7 @@ def compute_papers_similarity(db: Session, model_name: str, skip: int, limit: in
         results = db.query(models.Rating.reviewer_pk, models.Rating.paper_pk).offset(skip).limit(limit).all()
 
     reviewer_cache = results[0].reviewer_pk # setting first reviewer
-    past_papers_cache = db.query(models.Model_Paper_Keywords).join(models.Reviewers_Papers, models.Reviewers_Papers.paper_pk == models.Model_Paper_Keywords.paper_pk).filter((models.Reviewers_Papers.reviewer_pk == reviewer_cache) and (model.Model_Paper_Keywords.model_name == model_name)).all()
+    past_papers_cache = db.query(models.Model_Paper_Keywords).join(models.Reviewers_Papers, models.Reviewers_Papers.paper_pk == models.Model_Paper_Keywords.paper_pk).filter((models.Reviewers_Papers.reviewer_pk == reviewer_cache) & (models.Model_Paper_Keywords.model_name == model_name)).all()
     for result in results:
         reviewed_paper_data = db.query(models.Model_Paper_Keywords).filter(models.Model_Paper_Keywords.paper_pk == result.paper_pk).first()
         # Note: model_paper_keywords.model_keywords_w_pdf can be empty string if none of title, abstract or pdf_text are available
@@ -72,7 +72,7 @@ def compute_papers_similarity(db: Session, model_name: str, skip: int, limit: in
         if reviewer == reviewer_cache:
             past_papers_data = past_papers_cache
         else:
-            past_papers_data = db.query(models.Model_Paper_Keywords).join(models.Reviewers_Papers, models.Reviewers_Papers.paper_pk == models.Model_Paper_Keywords.paper_pk).filter((models.Reviewers_Papers.reviewer_pk == reviewer) and (model.Model_Paper_Keywords.model_name == model_name)).all()
+            past_papers_data = db.query(models.Model_Paper_Keywords).join(models.Reviewers_Papers, models.Reviewers_Papers.paper_pk == models.Model_Paper_Keywords.paper_pk).filter((models.Reviewers_Papers.reviewer_pk == reviewer) & (models.Model_Paper_Keywords.model_name == model_name)).all()
             past_papers_cache = past_papers_data
             reviewer_cache = reviewer
 
@@ -80,7 +80,7 @@ def compute_papers_similarity(db: Session, model_name: str, skip: int, limit: in
             similarity_wo_pdf, terms_wo_pdf = 0, 0
             for past_paper in past_papers_data:
                 if past_paper.model_keywords_wo_pdf:
-                    similarity_wo_pdf += keyword_similarity(past_paper.model_keywords_wo_pdf, reviewed_paper_data.model_keywords_wo_pdf)
+                    similarity_wo_pdf += mean_of_mean_similarity(past_paper.model_keywords_wo_pdf, reviewed_paper_data.model_keywords_wo_pdf)
                     terms_wo_pdf += 1
             if similarity_wo_pdf == 0:
                 average_similarity_wo_pdf = None # can't make it zero, cause then it can be infered as the model giving a similarity of 0 instead of data inavailability
@@ -93,7 +93,7 @@ def compute_papers_similarity(db: Session, model_name: str, skip: int, limit: in
             similarity_w_pdf, terms_w_pdf = 0, 0
             for past_paper in past_papers_data:
                 if past_paper.model_keywords_w_pdf:
-                    similarity_w_pdf += keyword_similarity(past_paper.model_keywords_w_pdf, reviewed_paper_data.model_keywords_w_pdf)
+                    similarity_w_pdf += mean_of_mean_similarity(past_paper.model_keywords_w_pdf, reviewed_paper_data.model_keywords_w_pdf)
                     terms_w_pdf += 1
             if similarity_w_pdf == 0:
                 average_similarity_w_pdf = None # can't make it zero, cause then it can be infered as the model giving a similarity of 0 instead of data inavailability
