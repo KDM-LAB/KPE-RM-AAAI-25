@@ -2,7 +2,7 @@ from keybert import KeyBERT
 
 kw_model = KeyBERT()
 
-def keyword_from_paper(text: str, type: str | None = None):
+def keybert_keywords(text: str, type: str | None = None):
     """
     text: The text string
     type: Can be either 'tit' for title or 'abs' for abstract. Anything else will be for pdf text.

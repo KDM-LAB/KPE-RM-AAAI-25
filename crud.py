@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, distinct
 import models, schemas
-from keybert_model import keyword_from_paper
+from keyphrase_models import model_dict
 from similarity_models import similarity_dict
 from correlations import get_correlations
 import numpy as np
@@ -20,9 +20,6 @@ def get_papers_by_id(db: Session, skip: int, limit: int | None):
         return db.query(models.Papers).offset(skip).limit(limit).all()
 
 def extract_papers_keywords(db: Session, model_name: str, skip: int, limit: int | None):
-    # if similarity_name not in list(similarity_dict.keys()):
-    #     raise ValueError(f"Given similarity_name does not exist, insert any of the following: {list(similarity_dict.keys())}")
-
     if limit is None: # extracting keywords from every paper
         results = db.query(models.Papers).all()
     else:
@@ -34,19 +31,19 @@ def extract_papers_keywords(db: Session, model_name: str, skip: int, limit: int 
         pdf_text_path = result.pdf_text_path
 
         if isinstance(title, str):
-            title_keywords = keyword_from_paper(title, 'tit')
+            title_keywords = model_dict[model_name](title, 'tit')
         else:
             title_keywords = []
 
         if isinstance(abstract, str):
-            abstract_keywords = keyword_from_paper(abstract, 'abs')
+            abstract_keywords = model_dict[model_name](abstract, 'abs')
         else:
             abstract_keywords = []
 
         if isinstance(pdf_text_path, str):
             with open(pdf_text_path, "r", encoding="utf-8") as tf:
                 pdf_text = tf.read()
-            pdf_text_keywords = keyword_from_paper(pdf_text)
+            pdf_text_keywords = model_dict[model_name](pdf_text)
         else:
             pdf_text_keywords = []
         
@@ -61,16 +58,6 @@ def extract_papers_keywords(db: Session, model_name: str, skip: int, limit: int 
         db.commit()
 
 def compute_papers_similarity(db: Session, model_name: str, similarity_name: str, skip: int, limit: int | None):
-    if similarity_name not in list(similarity_dict.keys()):
-        raise ValueError(f"Given similarity_name does not exist, insert any of the following: {list(similarity_dict.keys())}")
-
-    available_models = db.query(models.Model_Paper_Keywords.model_name).distinct().all()
-    for item in available_models:
-        if model_name == item[0]:
-            break
-    else:
-        raise ValueError(f"Given model_name does not have it's keywords computed, insert any of the following: {available_models}")
-
     if limit is None: # Computing similarity of every record
         results = db.query(models.Rating.reviewer_pk, models.Rating.paper_pk).all()
     else:

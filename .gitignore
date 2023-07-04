@@ -1,4 +1,5 @@
 /__pycache__/
+/keyphrase_models/__pycache__/
 schemas.py
 /data/
 /venv/

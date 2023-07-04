@@ -5,6 +5,8 @@ import models, schemas, crud
 from typing import Annotated
 from enum import Enum
 from sqlalchemy import func
+from keyphrase_models import model_dict
+from similarity_models import similarity_dict
 
 # models.Base.metadata.create_all(bind=engine) # Not creating db here, creating in db_populate file
 
@@ -62,6 +64,9 @@ def extract_keywords(background_tasks: BackgroundTasks,
                     skip: Annotated[int, Query(ge=0, le=3411)] = 0,
                     limit: Annotated[int | None, Query(ge=1, description="If None, then calculates keywords for all papers, else calculates for provided range of papers")] = None,
                     db: Session = Depends(get_db)):
+    if model_name not in list(model_dict.keys()):
+        return {"message":f"Given model_name does not exist, insert any of the following: {list(model_dict.keys())}"}
+
     error = db.query(models.Status_and_Error).filter((models.Status_and_Error.task == "extract_keywords") & (models.Status_and_Error.model_name == model_name)).first()
 
     if error is None:
@@ -92,6 +97,15 @@ def compute_similarity(background_tasks: BackgroundTasks,
                     skip: Annotated[int, Query(ge=0, le=476)] = 0,
                     limit: Annotated[int | None, Query(ge=1, description="If None, then computes similarity for all records, else computes for provided range")] = None,
                     db: Session = Depends(get_db)):
+    if similarity_name not in list(similarity_dict.keys()):
+        return {"message":f"Given similarity_name does not exist, insert any of the following: {list(similarity_dict.keys())}"}
+    available_models = db.query(models.Model_Paper_Keywords.model_name).distinct().all()
+    for item in available_models:
+        if model_name == item[0]:
+            break
+    else:
+        return {"message":f"Given model_name does not have it's keywords computed, insert any of the following: {available_models}"}
+
     error = db.query(models.Status_and_Error).filter((models.Status_and_Error.task == "compute_similarity") & (models.Status_and_Error.model_name == model_name) & (models.Status_and_Error.similarity_name == similarity_name)).first()
     
     if error is None:
