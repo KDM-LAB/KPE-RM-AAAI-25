@@ -23,6 +23,7 @@ def get_db():
 class LayoutEnum(str, Enum):
     whole: str = "whole"
     by_reviewer: str = "by_reviewer"
+    by_reviewer_describe: str = "by_reviewer_describe"
 
 
 ## Check error functions for POST endpoints:

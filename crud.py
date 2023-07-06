@@ -6,6 +6,7 @@ from similarity_models import similarity_dict
 from correlations import get_correlations
 import numpy as np
 # from db import engine, sessionLocal
+import matplotlib.pyplot as plt
 
 def get_reviewers_by_id(db: Session, skip: int, limit: int | None):
     if limit is None:
@@ -76,32 +77,62 @@ def compute_papers_similarity(db: Session, model_name: str, similarity_name: str
             past_papers_cache = past_papers_data
             reviewer_cache = reviewer
 
-        if reviewed_paper_data.model_keywords_wo_pdf:
-            similarity_wo_pdf, terms_wo_pdf = 0, 0
-            for past_paper in past_papers_data:
-                if past_paper.model_keywords_wo_pdf:
-                    similarity_wo_pdf += similarity_dict[similarity_name](past_paper.model_keywords_wo_pdf, reviewed_paper_data.model_keywords_wo_pdf)
-                    terms_wo_pdf += 1
-            if similarity_wo_pdf == 0:
+        if similarity_dict[similarity_name]["mode"] == "mean":
+            if reviewed_paper_data.model_keywords_wo_pdf:
+                similarity_wo_pdf, terms_wo_pdf = 0, 0
+                for past_paper in past_papers_data:
+                    if past_paper.model_keywords_wo_pdf:
+                        similarity_wo_pdf += similarity_dict[similarity_name]["sim"](past_paper.model_keywords_wo_pdf, reviewed_paper_data.model_keywords_wo_pdf)
+                        terms_wo_pdf += 1
+                if similarity_wo_pdf == 0:
+                    average_similarity_wo_pdf = None # can't make it zero, cause then it can be infered as the model giving a similarity of 0 instead of data inavailability
+                else:
+                    average_similarity_wo_pdf = round(similarity_wo_pdf/terms_wo_pdf, 2)
+            else:
                 average_similarity_wo_pdf = None # can't make it zero, cause then it can be infered as the model giving a similarity of 0 instead of data inavailability
-            else:
-                average_similarity_wo_pdf = round(similarity_wo_pdf/terms_wo_pdf, 2)
-        else:
-            average_similarity_wo_pdf = None # can't make it zero, cause then it can be infered as the model giving a similarity of 0 instead of data inavailability
 
-        if reviewed_paper_data.model_keywords_w_pdf:
-            similarity_w_pdf, terms_w_pdf = 0, 0
-            for past_paper in past_papers_data:
-                if past_paper.model_keywords_w_pdf:
-                    similarity_w_pdf += similarity_dict[similarity_name](past_paper.model_keywords_w_pdf, reviewed_paper_data.model_keywords_w_pdf)
-                    terms_w_pdf += 1
-            if similarity_w_pdf == 0:
-                average_similarity_w_pdf = None # can't make it zero, cause then it can be infered as the model giving a similarity of 0 instead of data inavailability
+            if reviewed_paper_data.model_keywords_w_pdf:
+                similarity_w_pdf, terms_w_pdf = 0, 0
+                for past_paper in past_papers_data:
+                    if past_paper.model_keywords_w_pdf:
+                        similarity_w_pdf += similarity_dict[similarity_name]["sim"](past_paper.model_keywords_w_pdf, reviewed_paper_data.model_keywords_w_pdf)
+                        terms_w_pdf += 1
+                if similarity_w_pdf == 0:
+                    average_similarity_w_pdf = None # can't make it zero, cause then it can be infered as the model giving a similarity of 0 instead of data inavailability
+                else:
+                    average_similarity_w_pdf = round(similarity_w_pdf/terms_w_pdf, 2)
             else:
-                average_similarity_w_pdf = round(similarity_w_pdf/terms_w_pdf, 2)
-        else:
-            average_similarity_w_pdf = None # can't make it zero, cause then it can be infered as the model giving a similarity of 0 instead of data inavailability
+                average_similarity_w_pdf = None # can't make it zero, cause then it can be infered as the model giving a similarity of 0 instead of data inavailability
         
+        elif similarity_dict[similarity_name]["mode"] == "max":
+            if reviewed_paper_data.model_keywords_wo_pdf:
+                max_similarity_wo_pdf = -1
+                for past_paper in past_papers_data:
+                    if past_paper.model_keywords_wo_pdf:
+                        sim = similarity_dict[similarity_name]["sim"](past_paper.model_keywords_wo_pdf, reviewed_paper_data.model_keywords_wo_pdf)
+                        if sim > max_similarity_wo_pdf:
+                            max_similarity_wo_pdf = sim
+                if max_similarity_wo_pdf == -1:
+                    average_similarity_wo_pdf = None # can't make it zero, cause then it can be infered as the model giving a similarity of 0 instead of data inavailability
+                else:
+                    average_similarity_wo_pdf = max_similarity_wo_pdf
+            else:
+                average_similarity_wo_pdf = None # can't make it zero, cause then it can be infered as the model giving a similarity of 0 instead of data inavailability
+
+            if reviewed_paper_data.model_keywords_w_pdf:
+                max_similarity_w_pdf = -1
+                for past_paper in past_papers_data:
+                    if past_paper.model_keywords_w_pdf:
+                        sim = similarity_dict[similarity_name]["sim"](past_paper.model_keywords_w_pdf, reviewed_paper_data.model_keywords_w_pdf)
+                        if sim > max_similarity_w_pdf:
+                            max_similarity_w_pdf = sim
+                if max_similarity_w_pdf == -1:
+                    average_similarity_w_pdf = None # can't make it zero, cause then it can be infered as the model giving a similarity of 0 instead of data inavailability
+                else:
+                    average_similarity_w_pdf = max_similarity_w_pdf
+            else:
+                average_similarity_w_pdf = None # can't make it zero, cause then it can be infered as the model giving a similarity of 0 instead of data inavailability
+
         similarity = models.Model_Reviewer_Paper_Similarity(reviewer_pk=result.reviewer_pk, paper_pk=result.paper_pk, model_name=model_name, similarity_name=similarity_name, model_similarity_wo_pdf=average_similarity_wo_pdf, model_similarity_w_pdf=average_similarity_w_pdf)
         db.add(similarity)
         db.commit()
@@ -188,7 +219,42 @@ def get_model_correlation_values(db: Session, model_name: str, similarity_name: 
             combined_result = {"Model_Correlation_wo_pdf": get_correlations(rating, model_similarity_wo_pdf),
                             "Model_Correlation_w_pdf": get_correlations(rating, model_similarity_w_pdf)}
             return_result[idx] = combined_result
+        print(return_result)
         return return_result
 
+    elif layout == "by_reviewer_describe":
+        wo_pdf_dict = {"Pearson":[], "Spearman":[], "Kendalltau":[]}
+        w_pdf_dict = {"Pearson":[], "Spearman":[], "Kendalltau":[]}
+        for idx in range(1,59,1):
+            output = get_model_similarity_values(db=db, model_name=model_name, similarity_name=similarity_name, reviewer_pk=idx, norm=norm)
+            rating = [row["Rating"] for row in output]
+            model_similarity_wo_pdf = [row["Model_Similarity_wo_pdf"] for row in output]
+            model_similarity_w_pdf = [row["Model_Similarity_w_pdf"] for row in output]
+
+            wo_pdf_data = get_correlations(rating, model_similarity_wo_pdf)
+            wo_pdf_dict["Pearson"].append(wo_pdf_data["Pearson"]["Correlation"])
+            wo_pdf_dict["Spearman"].append(wo_pdf_data["Spearman"]["Correlation"])
+            wo_pdf_dict["Kendalltau"].append(wo_pdf_data["Kendalltau"]["Correlation"])
+
+            w_pdf_data = get_correlations(rating, model_similarity_w_pdf)
+            w_pdf_dict["Pearson"].append(w_pdf_data["Pearson"]["Correlation"])
+            w_pdf_dict["Spearman"].append(w_pdf_data["Spearman"]["Correlation"])
+            w_pdf_dict["Kendalltau"].append(w_pdf_data["Kendalltau"]["Correlation"])
+
+        plt.scatter(list(range(1,59,1)), wo_pdf_dict["Pearson"])
+        title = f"{similarity_name} similarity"
+        print(title)
+        plt.title(title)
+        plt.xlabel("Reviewer ID")
+        plt.ylabel("Pearson Correlation")
+        plt.savefig(f".\correlation_graphs\{title}.jpg", dpi=400)
+
+        return {"wo_pdf":{"mean":{"Pearson":np.mean(wo_pdf_dict["Pearson"]), "Spearman":np.mean(wo_pdf_dict["Spearman"]), "Kendalltau":np.mean(wo_pdf_dict["Kendalltau"])},
+                        "median":{"Pearson":np.median(wo_pdf_dict["Pearson"]), "Spearman":np.median(wo_pdf_dict["Spearman"]), "Kendalltau":np.median(wo_pdf_dict["Kendalltau"])},
+                        "std":{"Pearson":np.std(wo_pdf_dict["Pearson"]), "Spearman":np.std(wo_pdf_dict["Spearman"]), "Kendalltau":np.std(wo_pdf_dict["Kendalltau"])}},
+                "w_pdf":{"mean":{"Pearson":np.mean(w_pdf_dict["Pearson"]), "Spearman":np.mean(w_pdf_dict["Spearman"]), "Kendalltau":np.mean(w_pdf_dict["Kendalltau"])},
+                        "median":{"Pearson":np.median(w_pdf_dict["Pearson"]), "Spearman":np.median(w_pdf_dict["Spearman"]), "Kendalltau":np.median(w_pdf_dict["Kendalltau"])},
+                        "std":{"Pearson":np.std(w_pdf_dict["Pearson"]), "Spearman":np.std(w_pdf_dict["Spearman"]), "Kendalltau":np.std(w_pdf_dict["Kendalltau"])}}}
+
     else:
-        raise Exception("Unknown format, enter either 'whole' or 'by_reviewer'")
+        raise Exception("Unknown format, enter either 'whole', 'by_reviewer_describe' or 'by_reviewer'")

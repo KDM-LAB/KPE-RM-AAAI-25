@@ -88,6 +88,17 @@ def ca_mean_of_mean_similarity(text1: str, text2: str) -> float:
             total_similarity += cosine_similarity(x, y)
     return round((total_similarity / (len(vec1) * len(vec2) + epsilon)) * 5, 2)
 
+def jaccard_similarity(text1: str, text2: str) -> float:
+    keywords_a = set(text1.split(";"))
+    keywords_b = set(text2.split(";"))
 
-similarity_dict = {"mean_of_mean":mean_of_mean_similarity,
-                "ca_mean_of_mean":ca_mean_of_mean_similarity}
+    intersection = len(keywords_a.intersection(keywords_b))
+    union = len(keywords_a.union(keywords_b))
+    return round((intersection / union) * 5, 2)
+
+similarity_dict = {"mean_of_mean-max":{"sim":mean_of_mean_similarity, "mode":"max"},
+                "mean_of_mean-mean":{"sim":mean_of_mean_similarity, "mode":"mean"},
+                "ca_mean_of_mean-max":{"sim":ca_mean_of_mean_similarity, "mode":"max"},
+                "ca_mean_of_mean-mean":{"sim":ca_mean_of_mean_similarity, "mode":"mean"},
+                "jaccard-max":{"sim":jaccard_similarity, "mode":"max"},
+                "jaccard-mean":{"sim":jaccard_similarity, "mode":"mean"}}
