@@ -84,7 +84,7 @@ def compute_papers_similarity(db: Session, model_name: str, similarity_name: str
                     if past_paper.model_keywords_wo_pdf:
                         similarity_wo_pdf += similarity_dict[similarity_name]["sim"](past_paper.model_keywords_wo_pdf, reviewed_paper_data.model_keywords_wo_pdf)
                         terms_wo_pdf += 1
-                if similarity_wo_pdf == 0:
+                if terms_wo_pdf == 0:
                     average_similarity_wo_pdf = None # can't make it zero, cause then it can be infered as the model giving a similarity of 0 instead of data inavailability
                 else:
                     average_similarity_wo_pdf = round(similarity_wo_pdf/terms_wo_pdf, 2)
@@ -97,7 +97,7 @@ def compute_papers_similarity(db: Session, model_name: str, similarity_name: str
                     if past_paper.model_keywords_w_pdf:
                         similarity_w_pdf += similarity_dict[similarity_name]["sim"](past_paper.model_keywords_w_pdf, reviewed_paper_data.model_keywords_w_pdf)
                         terms_w_pdf += 1
-                if similarity_w_pdf == 0:
+                if terms_w_pdf == 0:
                     average_similarity_w_pdf = None # can't make it zero, cause then it can be infered as the model giving a similarity of 0 instead of data inavailability
                 else:
                     average_similarity_w_pdf = round(similarity_w_pdf/terms_w_pdf, 2)
@@ -180,8 +180,8 @@ def get_model_similarity_values(db: Session, model_name: str, similarity_name: s
         minValue_w_pdf, maxValue_w_pdf = min(model_old_similarity_w_pdf), max(model_old_similarity_w_pdf)
 
         for result in results:
-            model_similarity_wo_pdf.append(((result.model_similarity_wo_pdf - minValue_wo_pdf)/(maxValue_wo_pdf - minValue_wo_pdf))*(5-0) + 0) # New range [0,5]
-            model_similarity_w_pdf.append(((result.model_similarity_w_pdf - minValue_w_pdf)/(maxValue_w_pdf - minValue_w_pdf))*(5-0) + 0)
+            model_similarity_wo_pdf.append(((result.model_similarity_wo_pdf - minValue_wo_pdf)/(maxValue_wo_pdf - minValue_wo_pdf + 1e-2))*(5-0) + 0) # New range [0,5]
+            model_similarity_w_pdf.append(((result.model_similarity_w_pdf - minValue_w_pdf)/(maxValue_w_pdf - minValue_w_pdf + 1e-2))*(5-0) + 0)
     else:
         model_similarity_wo_pdf = [result.model_similarity_wo_pdf for result in results]
         model_similarity_w_pdf = [result.model_similarity_w_pdf for result in results]
