@@ -219,7 +219,6 @@ def get_model_correlation_values(db: Session, model_name: str, similarity_name: 
             combined_result = {"Model_Correlation_wo_pdf": get_correlations(rating, model_similarity_wo_pdf),
                             "Model_Correlation_w_pdf": get_correlations(rating, model_similarity_w_pdf)}
             return_result[idx] = combined_result
-        print(return_result)
         return return_result
 
     elif layout == "by_reviewer_describe":
@@ -241,9 +240,9 @@ def get_model_correlation_values(db: Session, model_name: str, similarity_name: 
             w_pdf_dict["Spearman"].append(w_pdf_data["Spearman"]["Correlation"])
             w_pdf_dict["Kendalltau"].append(w_pdf_data["Kendalltau"]["Correlation"])
 
+        plt.figure()
         plt.scatter(list(range(1,59,1)), wo_pdf_dict["Pearson"])
-        title = f"{similarity_name} similarity"
-        print(title)
+        title = f"{model_name} model with {similarity_name} similarity"
         plt.title(title)
         plt.xlabel("Reviewer ID")
         plt.ylabel("Pearson Correlation")
