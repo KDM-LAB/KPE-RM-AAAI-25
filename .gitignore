@@ -1,7 +1,9 @@
-/__pycache__/
-/keyphrase_models/__pycache__/
+__pycache__
+.ipynb_checkpoints
 schemas.py
 /data/
 /venv/
-test.py
+/test.py
 /correlation_graphs/
+keyphrase_models/BertKPE/data
+keyphrase_models/BertKPE/checkpoints

@@ -7,6 +7,10 @@ from correlations import get_correlations
 import numpy as np
 # from db import engine, sessionLocal
 import matplotlib.pyplot as plt
+import nltk
+from nltk.corpus import stopwords
+nltk.download('stopwords')
+stop = stopwords.words('english')
 
 def get_reviewers_by_id(db: Session, skip: int, limit: int | None):
     if limit is None:
@@ -31,28 +35,49 @@ def extract_papers_keywords(db: Session, model_name: str, skip: int, limit: int 
         abstract = result.abstract
         pdf_text_path = result.pdf_text_path
 
-        if isinstance(title, str):
-            title_keywords = model_dict[model_name](title, 'tit')
-        else:
-            title_keywords = []
+        if model_name == "bertkpe":
+            Title = title if isinstance(title, str) else ""
+            Abstract = abstract if isinstance(abstract, str) else ""
 
-        if isinstance(abstract, str):
-            abstract_keywords = model_dict[model_name](abstract, 'abs')
-        else:
-            abstract_keywords = []
+            if Title or Abstract:
+                try:
+                    fused_keywords_wo_pdf = model_dict[model_name](title=Title, abstract=Abstract)
+                except:
+                    print(f"Issue In extraction. title: {Title} || abstract: {Abstract}")
+                    fused_keywords_wo_pdf = ";".join([i.lower() for i in Title.split(" ") if i.lower() not in stop])
+            else:
+                fused_keywords_wo_pdf = ""
 
-        if isinstance(pdf_text_path, str):
-            with open(pdf_text_path, "r", encoding="utf-8") as tf:
-                pdf_text = tf.read()
-            pdf_text_keywords = model_dict[model_name](pdf_text)
+            if isinstance(pdf_text_path, str):
+                with open(pdf_text_path, "r", encoding="utf-8") as tf:
+                    pdf_text = tf.read()
+                fused_keywords_w_pdf = model_dict[model_name](pdf_text=pdf_text)
+            else:
+                fused_keywords_w_pdf = fused_keywords_wo_pdf
+
         else:
-            pdf_text_keywords = []
-        
-        fused_keywords_wo_pdf = ";".join(abstract_keywords + title_keywords)
-        if pdf_text_keywords:
-            fused_keywords_w_pdf = ";".join(pdf_text_keywords)
-        else:
-            fused_keywords_w_pdf = fused_keywords_wo_pdf
+            if isinstance(title, str):
+                title_keywords = model_dict[model_name](title, 'tit')
+            else:
+                title_keywords = []
+
+            if isinstance(abstract, str):
+                abstract_keywords = model_dict[model_name](abstract, 'abs')
+            else:
+                abstract_keywords = []
+
+            if isinstance(pdf_text_path, str):
+                with open(pdf_text_path, "r", encoding="utf-8") as tf:
+                    pdf_text = tf.read()
+                pdf_text_keywords = model_dict[model_name](pdf_text)
+            else:
+                pdf_text_keywords = []
+            
+            fused_keywords_wo_pdf = ";".join(abstract_keywords + title_keywords)
+            if pdf_text_keywords:
+                fused_keywords_w_pdf = ";".join(pdf_text_keywords)
+            else:
+                fused_keywords_w_pdf = fused_keywords_wo_pdf
 
         kw = models.Model_Paper_Keywords(paper_pk=result.paper_pk, model_name=model_name, model_keywords_wo_pdf=fused_keywords_wo_pdf, model_keywords_w_pdf=fused_keywords_w_pdf)
         db.add(kw)
