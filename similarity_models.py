@@ -1,5 +1,7 @@
 import spacy
 import numpy as np
+from nltk.tokenize import word_tokenize
+from nltk.metrics import jaccard_distance
 
 nlp = spacy.load('en_core_web_md')
 # This model uses 300 dimensional representation space
@@ -9,12 +11,65 @@ epsilon = 1e-2 # to prevent zero division when all of the tokens are in out of v
 # mean of mean similarity: inner mean is for keyphrases(mean of keywords making the keyphrase) while outer mean is for the mean of all the vectors obtained
 # cross attention mean of mean similarity: inner mean is for keyphrases(mean of keywords making the keyphrase) while for the vectors, we do a cross attention kind of mean.
 
+
+# ----------------------------------------------------------------
+# Nishit's jaccard code:
+
+def discard_subsets(phrases):  #consider only the superset and remove all subsets
+    subsets_removed = []
+    for i in range(len(phrases)):
+        is_subset = False
+        for j in range(i,len(phrases)):
+            if i != j and set(phrases[i].split()).issubset(set(phrases[j].split())):
+                is_subset = True
+                break
+        if not is_subset:
+            subsets_removed.append(phrases[i])
+    return subsets_removed
+
+def partial_match(concept1, concept2):   #jaccard similarity
+    tokens1 = set(word_tokenize(concept1.lower()))
+    tokens2 = set(word_tokenize(concept2.lower()))
+    
+    similarity = 1 - jaccard_distance(tokens1, tokens2)
+    return similarity
+
+def find_matching_concepts(review_concepts, manuscript_concepts):   #get the matching between the concepts
+    similarity=0   #find overall similarity for each KC of the reviewer with manuscript
+    try:
+        for r_concept in review_concepts[:30]:
+            sim=[]
+            for m_concept in manuscript_concepts[:30]:
+                sim.append(partial_match(r_concept,m_concept))
+            similarity+=max(sim)   #consider max similarity for partial matching of the keyconcepts
+    except:
+        return 0
+    if(min(len(manuscript_concepts),len(review_concepts))==0):
+        return 0
+    else:
+        # return round(similarity/(min(len(manuscript_concepts),len(review_concepts),30.0)),2)
+
+        # I think the above one has a flaw. Since if for example, len(manuscript_concepts) = 1
+        # and len(review_concepts) = 15. Then it'll return "similarity/1" and there is a high 
+        # chance that similarity will be greater than 1, making similarity/1 > 1 which should not happen
+        # so I am dividing by what it should have been divided by, i.e. outer for loop len(review_concepts) or 30
+        # This also shows that one could swap manuscript_concepts and review_concepts and get different similarities
+        # just cause the way it's made which should also not happen. It's something like ca_mean_of_mean
+        # but not stable. I also think there are redundant things in this code which i can 
+        # fix but I'll just keep it the way it's made.
+        return round((similarity/(min(len(review_concepts),30.0)) * 5), 2)
+
+def jaccard_similarity_sync(text1: str, text2: str) -> float:
+    dis1 = discard_subsets(text1.split(";"))
+    dis2 = discard_subsets(text2.split(";"))
+    return find_matching_concepts(dis1, dis2)
+# ----------------------------------------------------------------
+
+
 def cosine_similarity(vec_1: np.ndarray, vec_2: np.ndarray) -> float:
     return np.dot(vec_1, vec_2) / (np.linalg.norm(vec_1) * np.linalg.norm(vec_2) + epsilon)
 
-def mm_vector_representation(keyphrases: str) -> np.ndarray:
-    keyphrases = keyphrases.split(";")
-
+def mm_vector_representation(keyphrases: list[str]) -> np.ndarray:
     single_keywords = []
     multi_keywords = []
     for item in keyphrases:
@@ -43,8 +98,15 @@ def mm_vector_representation(keyphrases: str) -> np.ndarray:
     return (single_keywords_vector_sum + multi_keywords_vector_sum) / (single_keywords_data_count + multi_keywords_data_count + epsilon)
 
 def mean_of_mean_similarity(text1: str, text2: str) -> float:
-    vec1 = mm_vector_representation(text1)
-    vec2 = mm_vector_representation(text2)
+    vec1 = mm_vector_representation(text1.split(";"))
+    vec2 = mm_vector_representation(text2.split(";"))
+    return round(cosine_similarity(vec1, vec2) * 5, 2)
+
+def mean_of_mean_similarity_sync(text1: str, text2: str) -> float:
+    dis1 = discard_subsets(text1.split(";"))
+    dis2 = discard_subsets(text2.split(";"))
+    vec1 = mm_vector_representation(dis1)
+    vec2 = mm_vector_representation(dis2)
     return round(cosine_similarity(vec1, vec2) * 5, 2)
 
 def camm_vector_representation(keyphrases: str) -> np.ndarray:
@@ -98,7 +160,11 @@ def jaccard_similarity(text1: str, text2: str) -> float:
 
 similarity_dict = {"mean_of_mean-max":{"sim":mean_of_mean_similarity, "mode":"max"},
                 "mean_of_mean-mean":{"sim":mean_of_mean_similarity, "mode":"mean"},
+                "mean_of_mean_sync-max":{"sim":mean_of_mean_similarity_sync, "mode":"max"},
+                "mean_of_mean_sync-mean":{"sim":mean_of_mean_similarity_sync, "mode":"mean"},
                 "ca_mean_of_mean-max":{"sim":ca_mean_of_mean_similarity, "mode":"max"},
                 "ca_mean_of_mean-mean":{"sim":ca_mean_of_mean_similarity, "mode":"mean"},
                 "jaccard-max":{"sim":jaccard_similarity, "mode":"max"},
-                "jaccard-mean":{"sim":jaccard_similarity, "mode":"mean"}}
+                "jaccard-mean":{"sim":jaccard_similarity, "mode":"mean"},
+                "jaccard_sync-max":{"sim":jaccard_similarity_sync, "mode":"max"},
+                "jaccard_sync-mean":{"sim":jaccard_similarity_sync, "mode":"mean"}}

@@ -3,7 +3,7 @@ from sqlalchemy import desc, distinct
 import models, schemas
 from keyphrase_models import model_dict
 from similarity_models import similarity_dict
-from correlations import get_correlations
+from correlations import get_correlations, get_correlations_sync
 import numpy as np
 # from db import engine, sessionLocal
 import matplotlib.pyplot as plt
@@ -245,6 +245,32 @@ def get_model_correlation_values(db: Session, model_name: str, similarity_name: 
                             "Model_Correlation_w_pdf": get_correlations(rating, model_similarity_w_pdf)}
             return_result[idx] = combined_result
         return return_result
+
+    elif layout == "by_reviewer_sync":
+        wo_pdf_corr = {"pearson":[], "spearman":[], "kendaltau":[]}
+        w_pdf_corr = {"pearson":[], "spearman":[], "kendaltau":[]}
+        for idx in range(1,59,1):
+            output = get_model_similarity_values(db=db, model_name=model_name, similarity_name=similarity_name, reviewer_pk=idx, norm=norm)
+            rating = [row["Rating"] for row in output]
+            model_similarity_wo_pdf = [row["Model_Similarity_wo_pdf"] for row in output]
+            model_similarity_w_pdf = [row["Model_Similarity_w_pdf"] for row in output]
+
+            p, s, k = get_correlations_sync(rating, model_similarity_wo_pdf)
+            wo_pdf_corr["pearson"].append(p)
+            wo_pdf_corr["spearman"].append(s)
+            wo_pdf_corr["kendaltau"].append(k)
+
+            p, s, k = get_correlations_sync(rating, model_similarity_w_pdf)
+            w_pdf_corr["pearson"].append(p)
+            w_pdf_corr["spearman"].append(s)
+            w_pdf_corr["kendaltau"].append(k)
+
+        for corr in [wo_pdf_corr, w_pdf_corr]:
+            for k in corr.keys():
+                corr[k] = np.mean(corr[k])
+
+        return {"Model_Correlation_wo_pdf": wo_pdf_corr,
+                "Model_Correlation_w_pdf": w_pdf_corr}
 
     elif layout == "by_reviewer_describe":
         wo_pdf_dict = {"Pearson":[], "Spearman":[], "Kendalltau":[]}
