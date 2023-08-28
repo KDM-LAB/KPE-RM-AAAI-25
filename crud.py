@@ -11,6 +11,9 @@ import nltk
 from nltk.corpus import stopwords
 nltk.download('stopwords')
 stop = stopwords.words('english')
+import time
+import json
+from langdetect import detect
 
 def get_reviewers_by_id(db: Session, skip: int, limit: int | None):
     if limit is None:
@@ -55,21 +58,95 @@ def extract_papers_keywords(db: Session, model_name: str, skip: int, limit: int 
             else:
                 fused_keywords_w_pdf = fused_keywords_wo_pdf
 
+        elif model_name == "one2set":
+            print(f"paper_pk: {result.paper_pk}", end=" | ")
+            Title = title if isinstance(title, str) else ""
+            Abstract = abstract if isinstance(abstract, str) else ""
+
+            sta = time.perf_counter()
+            if Title or Abstract:
+                if Title and Abstract:
+                    text = Title + " <eos> " + Abstract
+                    fused_keywords_wo_pdf = model_dict[model_name](text=text)
+                else:
+                    text = Title + Abstract
+                    fused_keywords_wo_pdf = model_dict[model_name](text=text)
+            else:
+                fused_keywords_wo_pdf = ""
+            eta = time.perf_counter()
+            print(f"titabs: {round(eta-sta, 4)}", end=" | ")
+
+            sp = time.perf_counter()
+            if isinstance(pdf_text_path, str):
+                with open(pdf_text_path, "r", encoding="utf-8") as tf:
+                    pdf_text = tf.read()
+                fused_keywords_w_pdf = model_dict[model_name](text=pdf_text)
+            else:
+                fused_keywords_w_pdf = fused_keywords_wo_pdf
+            ep = time.perf_counter()
+            print(f"pdf: {round(ep-sp, 4)}", end=" | ")
+
+        elif model_name == "promptrank":
+            ssid = result.ssId
+            with open(r'promptrank_keyphrases\promptrank_keywords.json', encoding="utf-8", mode="r") as f:
+                promptrank_dict = json.load(f)
+
+            try:
+                fused_keywords_wo_pdf = promptrank_dict[ssid]["ta_keywords"]
+            except:
+                fused_keywords_wo_pdf = ""
+
+            try:
+                fused_keywords_w_pdf = promptrank_dict[ssid]["pdf_keywords"]
+                if fused_keywords_w_pdf == "":
+                    fused_keywords_w_pdf = fused_keywords_wo_pdf
+            except:
+                fused_keywords_w_pdf = fused_keywords_wo_pdf
+
         else:
+            print(f"paper_pk: {result.paper_pk}", end=" | ")
             if isinstance(title, str):
-                title_keywords = model_dict[model_name](title, 'tit')
+                # if detect(title) == "en":
+                st = time.perf_counter()
+                try:
+                    title_keywords = model_dict[model_name](title, 'tit')
+                except:
+                    title_keywords = []
+                et = time.perf_counter()
+                print(f"title: {round(et-st, 4)}", end=" | ")
+                # else:
+                #     title_keywords = []
+                #     print(f"TIT {result.paper_pk} is REJECTED: {title}")
             else:
                 title_keywords = []
 
             if isinstance(abstract, str):
+                # if detect(abstract) == "en":
+                sa = time.perf_counter()
                 abstract_keywords = model_dict[model_name](abstract, 'abs')
+                ea = time.perf_counter()
+                print(f"abstract: {round(ea-sa, 4)}", end=" | ")
+                # else:
+                #     abstract_keywords = []
+                #     print(f"ABS {result.paper_pk} is REJECTED: {abstract}")
             else:
                 abstract_keywords = []
 
             if isinstance(pdf_text_path, str):
+                sr = time.perf_counter()
                 with open(pdf_text_path, "r", encoding="utf-8") as tf:
                     pdf_text = tf.read()
+                er = time.perf_counter()
+                print(f"pdf_read: {round(er-sr, 4)}", end=" | ")
+                
+                # if detect(pdf_text[:1000]) == "en":
+                sp = time.perf_counter()
                 pdf_text_keywords = model_dict[model_name](pdf_text)
+                ep = time.perf_counter()
+                print(f"pdf: {round(ep-sp, 4)}", end=" | ")
+                # else:
+                #     pdf_text_keywords = []
+                #     print(f"PDF {result.paper_pk} is REJECTED: {pdf_text[:100]}")
             else:
                 pdf_text_keywords = []
             
@@ -79,9 +156,13 @@ def extract_papers_keywords(db: Session, model_name: str, skip: int, limit: int 
             else:
                 fused_keywords_w_pdf = fused_keywords_wo_pdf
 
+        sd = time.perf_counter()
         kw = models.Model_Paper_Keywords(paper_pk=result.paper_pk, model_name=model_name, model_keywords_wo_pdf=fused_keywords_wo_pdf, model_keywords_w_pdf=fused_keywords_w_pdf)
         db.add(kw)
         db.commit()
+        ed = time.perf_counter()
+        print(f"data_write: {round(ed-sd, 4)}")
+
 
 def compute_papers_similarity(db: Session, model_name: str, similarity_name: str, skip: int, limit: int | None):
     if limit is None: # Computing similarity of every record
@@ -307,4 +388,4 @@ def get_model_correlation_values(db: Session, model_name: str, similarity_name: 
                         "std":{"Pearson":np.std(w_pdf_dict["Pearson"]), "Spearman":np.std(w_pdf_dict["Spearman"]), "Kendalltau":np.std(w_pdf_dict["Kendalltau"])}}}
 
     else:
-        raise Exception("Unknown format, enter either 'whole', 'by_reviewer_describe' or 'by_reviewer'")
+        raise Exception("Unknown format, enter either 'whole', 'by_reviewer_sync', 'by_reviewer_describe' or 'by_reviewer'")

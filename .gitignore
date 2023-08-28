@@ -7,3 +7,5 @@ schemas.py
 /correlation_graphs/
 keyphrase_models/BertKPE/data
 keyphrase_models/BertKPE/checkpoints
+keyphrase_models/kg_one2set/data
+keyphrase_models/kg_one2set/output

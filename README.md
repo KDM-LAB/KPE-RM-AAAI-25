@@ -5,3 +5,25 @@ Install the dependencies from `requrirements.txt`. You might also want to downlo
 Run the db_populate.py file first to create and populate the database with gold_standard_data. After that run `uvicorn main:app --reload` in terminal to start the backend server.
 
 Python version `3.10.11` is used in the project.
+
+All the models are made to extract 30 keywords, provided there is an argument controlling the number of extracted keywords, else it's upon the model. All extract multiword keyphrases, unless provided otherwise. All the models which have been used to extract keywords are:
+
+| Name   |      Description      |
+|:----------:|:-------------:|
+| TF-IDF | Statistical |
+| textrank | Graphical |
+| kpminer | Statistical |
+| singlerank | Graphical |
+| positionrank | Graphical |
+| yake | Statistical |
+| multipartiterank | Graphical |
+| topicrank | Graphical |
+| keybert | DL. 15 keywords. Only single word keyphrases |
+| keybert_multiword | DL. 15 keywords, non english papers removed with langdetect |
+| keybert_30 | DL. 30 keywords |
+| patternrank | DL. 30 keywords, non english papers removed with langdetect |
+| patternrank_wo_langdetect | DL. 30 keywords |
+| keybart | DL |
+| bertkpe | DL |
+| one2set | DL |
+| promptrank | DL |
