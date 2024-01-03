@@ -14,6 +14,7 @@ stop = stopwords.words('english')
 import time
 import json
 from langdetect import detect
+import kendalltau_loss
 
 def get_reviewers_by_id(db: Session, skip: int, limit: int | None):
     if limit is None:
@@ -86,22 +87,23 @@ def extract_papers_keywords(db: Session, model_name: str, skip: int, limit: int 
             ep = time.perf_counter()
             print(f"pdf: {round(ep-sp, 4)}", end=" | ")
 
-        elif model_name == "promptrank":
-            ssid = result.ssId
-            with open(r'promptrank_keyphrases\promptrank_keywords.json', encoding="utf-8", mode="r") as f:
-                promptrank_dict = json.load(f)
+        # Uncomment this elif block if you wish to populate promptrank keyphrases using precomputed keyphrases
+        # elif model_name == "promptrank":
+        #     ssid = result.ssId
+        #     with open(r'promptrank_keyphrases\promptrank_keywords.json', encoding="utf-8", mode="r") as f:
+        #         promptrank_dict = json.load(f)
 
-            try:
-                fused_keywords_wo_pdf = promptrank_dict[ssid]["ta_keywords"]
-            except:
-                fused_keywords_wo_pdf = ""
+        #     try:
+        #         fused_keywords_wo_pdf = promptrank_dict[ssid]["ta_keywords"]
+        #     except:
+        #         fused_keywords_wo_pdf = ""
 
-            try:
-                fused_keywords_w_pdf = promptrank_dict[ssid]["pdf_keywords"]
-                if fused_keywords_w_pdf == "":
-                    fused_keywords_w_pdf = fused_keywords_wo_pdf
-            except:
-                fused_keywords_w_pdf = fused_keywords_wo_pdf
+        #     try:
+        #         fused_keywords_w_pdf = promptrank_dict[ssid]["pdf_keywords"]
+        #         if fused_keywords_w_pdf == "":
+        #             fused_keywords_w_pdf = fused_keywords_wo_pdf
+        #     except:
+        #         fused_keywords_w_pdf = fused_keywords_wo_pdf
 
         else:
             print(f"paper_pk: {result.paper_pk}", end=" | ")
@@ -356,11 +358,22 @@ def get_model_correlation_values(db: Session, model_name: str, similarity_name: 
     elif layout == "by_reviewer_describe":
         wo_pdf_dict = {"Pearson":[], "Spearman":[], "Kendalltau":[]}
         w_pdf_dict = {"Pearson":[], "Spearman":[], "Kendalltau":[]}
+
+        refs = {} # for kendalltau loss
+        preds_wo_pdf = {} # for kendalltau loss
+        preds_w_pdf = {} # for kendalltau loss
+
         for idx in range(1,59,1):
             output = get_model_similarity_values(db=db, model_name=model_name, similarity_name=similarity_name, reviewer_pk=idx, norm=norm)
+
             rating = [row["Rating"] for row in output]
             model_similarity_wo_pdf = [row["Model_Similarity_wo_pdf"] for row in output]
             model_similarity_w_pdf = [row["Model_Similarity_w_pdf"] for row in output]
+            paper_id = [str(row["Paper_pk"]) for row in output]
+
+            refs[idx] = dict(zip(paper_id, rating))
+            preds_wo_pdf[idx] = dict(zip(paper_id, model_similarity_wo_pdf))
+            preds_w_pdf[idx] = dict(zip(paper_id, model_similarity_w_pdf))
 
             wo_pdf_data = get_correlations(rating, model_similarity_wo_pdf)
             wo_pdf_dict["Pearson"].append(wo_pdf_data["Pearson"]["Correlation"])
@@ -372,18 +385,24 @@ def get_model_correlation_values(db: Session, model_name: str, similarity_name: 
             w_pdf_dict["Spearman"].append(w_pdf_data["Spearman"]["Correlation"])
             w_pdf_dict["Kendalltau"].append(w_pdf_data["Kendalltau"]["Correlation"])
 
-        plt.figure()
-        plt.scatter(list(range(1,59,1)), wo_pdf_dict["Pearson"])
-        title = f"{model_name} model with {similarity_name} similarity"
-        plt.title(title)
-        plt.xlabel("Reviewer ID")
-        plt.ylabel("Pearson Correlation")
-        plt.savefig(f".\correlation_graphs\{title}.jpg", dpi=400)
+        # Uncomment to plot and save a graph for pearson correlation of different reviewers
+        # plt.figure()
+        # plt.scatter(list(range(1,59,1)), wo_pdf_dict["Pearson"])
+        # title = f"{model_name} model with {similarity_name} similarity"
+        # plt.title(title)
+        # plt.xlabel("Reviewer ID")
+        # plt.ylabel("Pearson Correlation")
+        # plt.savefig(f".\correlation_graphs\{title}.jpg", dpi=400)
 
-        return {"wo_pdf":{"mean":{"Pearson":np.mean(wo_pdf_dict["Pearson"]), "Spearman":np.mean(wo_pdf_dict["Spearman"]), "Kendalltau":np.mean(wo_pdf_dict["Kendalltau"])},
+        ktl_wo_pdf = kendalltau_loss.compute_main_metric(preds_wo_pdf, refs)
+        ktl_w_pdf = kendalltau_loss.compute_main_metric(preds_w_pdf, refs)
+
+        return {"wo_pdf":{"kendalTauLoss":ktl_wo_pdf,
+                        "mean":{"Pearson":np.mean(wo_pdf_dict["Pearson"]), "Spearman":np.mean(wo_pdf_dict["Spearman"]), "Kendalltau":np.mean(wo_pdf_dict["Kendalltau"])},
                         "median":{"Pearson":np.median(wo_pdf_dict["Pearson"]), "Spearman":np.median(wo_pdf_dict["Spearman"]), "Kendalltau":np.median(wo_pdf_dict["Kendalltau"])},
                         "std":{"Pearson":np.std(wo_pdf_dict["Pearson"]), "Spearman":np.std(wo_pdf_dict["Spearman"]), "Kendalltau":np.std(wo_pdf_dict["Kendalltau"])}},
-                "w_pdf":{"mean":{"Pearson":np.mean(w_pdf_dict["Pearson"]), "Spearman":np.mean(w_pdf_dict["Spearman"]), "Kendalltau":np.mean(w_pdf_dict["Kendalltau"])},
+                "w_pdf":{"kendalTauLoss":ktl_w_pdf,
+                        "mean":{"Pearson":np.mean(w_pdf_dict["Pearson"]), "Spearman":np.mean(w_pdf_dict["Spearman"]), "Kendalltau":np.mean(w_pdf_dict["Kendalltau"])},
                         "median":{"Pearson":np.median(w_pdf_dict["Pearson"]), "Spearman":np.median(w_pdf_dict["Spearman"]), "Kendalltau":np.median(w_pdf_dict["Kendalltau"])},
                         "std":{"Pearson":np.std(w_pdf_dict["Pearson"]), "Spearman":np.std(w_pdf_dict["Spearman"]), "Kendalltau":np.std(w_pdf_dict["Kendalltau"])}}}
 

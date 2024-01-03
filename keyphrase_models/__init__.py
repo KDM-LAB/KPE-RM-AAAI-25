@@ -5,6 +5,8 @@ from keyphrase_models.keybart_model import keybart_keywords
 from keyphrase_models.patternrank_model import patternrank_keywords
 from keyphrase_models.one2set_model import one2set_keywords
 from keyphrase_models.bertkpe_model import bertkpe_keywords
+from keyphrase_models.promptrank_model import promptrank_keywords # Comment this line if you 
+# wish to populate promptrank keyphrases using precomputed keyphrases
 
 from keyphrase_models.TFIDF import TFIDF_keywords
 from keyphrase_models.YAKE import YAKE_keywords
@@ -15,7 +17,7 @@ from keyphrase_models.PositionRank import PositionRank_keywords
 from keyphrase_models.MultipartiteRank import MultipartiteRank_keywords
 from keyphrase_models.KPMiner import KPMiner_keywords
 
-
+# Comment this dict if you wish to populate promptrank keyphrases using precomputed keyphrases
 model_dict = {"keybert":keybert_keywords,
             "keybert_multiword":keybert_multiword_keywords,
             "keybert_30":keybert_30_keywords,
@@ -23,6 +25,7 @@ model_dict = {"keybert":keybert_keywords,
             "bertkpe":bertkpe_keywords,
             "patternrank":patternrank_keywords,
             "one2set":one2set_keywords,
+            "promptrank":promptrank_keywords,
             "tfidf":TFIDF_keywords,
             "yake":YAKE_keywords,
             "textrank":TextRank_keywords,
@@ -30,5 +33,22 @@ model_dict = {"keybert":keybert_keywords,
             "topicrank":TopicRank_keywords,
             "positionrank":PositionRank_keywords,
             "multipartiterank":MultipartiteRank_keywords,
-            "kpminer":KPMiner_keywords,
-            "promptrank":None}
+            "kpminer":KPMiner_keywords}
+
+# Uncomment this dict if you wish to populate promptrank keyphrases using precomputed keyphrases
+# model_dict = {"keybert":keybert_keywords,
+#             "keybert_multiword":keybert_multiword_keywords,
+#             "keybert_30":keybert_30_keywords,
+#             "keybart":keybart_keywords,
+#             "bertkpe":bertkpe_keywords,
+#             "patternrank":patternrank_keywords,
+#             "one2set":one2set_keywords,
+#             "promptrank":None,
+#             "tfidf":TFIDF_keywords,
+#             "yake":YAKE_keywords,
+#             "textrank":TextRank_keywords,
+#             "singlerank":SingleRank_keywords,
+#             "topicrank":TopicRank_keywords,
+#             "positionrank":PositionRank_keywords,
+#             "multipartiterank":MultipartiteRank_keywords,
+#             "kpminer":KPMiner_keywords}

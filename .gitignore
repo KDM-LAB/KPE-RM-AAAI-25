@@ -9,3 +9,4 @@ keyphrase_models/BertKPE/data
 keyphrase_models/BertKPE/checkpoints
 keyphrase_models/kg_one2set/data
 keyphrase_models/kg_one2set/output
+keyphrase_models/promptrank/stanford-corenlp-4.5.4
