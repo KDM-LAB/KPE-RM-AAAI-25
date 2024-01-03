@@ -12,7 +12,10 @@ Run the db_populate.py file first to create and populate the database with gold_
 - Running promptrank model takes a lot of time, hence for gold_standard_dataset, we have already extracted keyphrases and put it inside `promptrank_keyphrases` folder. So if you just have to populate the promptrank keyphrases for gold_standard_dataset, you can use these precomputed keyphrases. All you need to do is comment/uncomment lines in the files `keyphrases_models/__inin__.py` and `crud.py` as mentioned in the files.
 
 #### 2. For bertkpe:
+You need to download the zip file (BertKPE.zip) from [here](https://drive.google.com/drive/folders/1qDUtiR3QtNYVPfpIfjWiO_iFwCw_gCzT?usp=sharing). Extract the file and move the folders into `keyphrase_models/BertKPE`. Ensure that after extracting, the two folders you get are named "checkpoints" and "data".
+
 #### 3. For one2set:
+You need to download the zip file (kg_one2set.zip) from [here](https://drive.google.com/drive/folders/1qDUtiR3QtNYVPfpIfjWiO_iFwCw_gCzT?usp=sharing). Extract the file and move the folders into `keyphrase_models/kg_one2set`. Ensure that after extracting, the two folders you get are named "output" and "data".
 
 ### Some details regarding the models:
 Every model is made to extract 30 keyphrases, provided there is an argument controlling the number of extracted keyphrases, else it's upon the model. Every model extracts multiword keyphrases, unless provided otherwise. Every model which have been used to extract keyphrases are:
