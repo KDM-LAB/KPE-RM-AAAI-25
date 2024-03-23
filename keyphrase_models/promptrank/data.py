@@ -425,10 +425,12 @@ def data_process(setting_dict, dataset_dir, dataset_name):
     elif dataset_name == "SemEval2010":
         data, ref = get_short_data(dataset_dir + "/semeval_test.json")
     elif dataset_name == "gold":
-        #data = get_long_data_gold(dataset_dir)
+        # data = get_long_data_gold(dataset_dir)
         data = clean_text(text=dataset_dir,database="gold")
     else:
         data, ref = get_inspec_data(dataset_dir)
+
+    # print(f"{data=}")
     
     # docs_pairs = []
     # doc_list = []
@@ -483,7 +485,9 @@ def data_process(setting_dict, dataset_dir, dataset_name):
 
     # Assuming 'data' is a variable of type str
 
+    # print(f"{MAX_LEN=}")
     doc = ' '.join(data.split()[:MAX_LEN])  # Assuming you have defined MAX_LEN
+    # print(f"{doc=}")
     doc_list.append(doc)
     candidates = []
     # Statistic on empty docs
@@ -506,6 +510,8 @@ def data_process(setting_dict, dataset_dir, dataset_name):
     # Generate docs_pairs for constructing the dataset
     # doc = doc.lower()
     doc = temp_en + "\"" + doc + "\""
+    # print(f"{doc=}")
+    # print(f"{candidates=}")
     doc_pairs, count = generate_doc_pairs(doc, candidates,0)
     docs_pairs.extend(doc_pairs)
     t_n += count
@@ -513,6 +519,8 @@ def data_process(setting_dict, dataset_dir, dataset_name):
 
     # print("candidate_num: ", candidate_num)
     # print("unmatched: ", t_n)
+    # print(f"{docs_pairs[0][1]}")
+    # print(f"{docs_pairs[0][2]}")
     dataset = KPE_Dataset(docs_pairs)
     # print("examples: ", dataset.total_examples)
     # print(doc)

@@ -52,7 +52,7 @@ rating_data = pd.read_csv(RATING_PATH, sep='\t')
 
 for r in range(rating_data.shape[0]):
     auth_id = rating_data.iloc[r, 0]
-    auth_pk = db.query(models.Reviewers).filter(models.Reviewers.author_id == auth_id).first().reviewer_pk
+    auth_pk = db.query(models.Reviewers).filter(models.Reviewers.author_id == str(auth_id)).first().reviewer_pk
 
     for c in range(1, rating_data.shape[1]-10):
         submitted_paper = rating_data.iloc[r, c]
@@ -74,7 +74,3 @@ for r in range(rating_data.shape[0]):
                 db.refresh(rate)
 
 db.close()
-
-
-
-

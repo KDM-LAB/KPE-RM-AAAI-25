@@ -60,6 +60,10 @@ def get_setting_dict():
 #     else:
 #         text = pdf_text
 
+# t1 = time.perf_counter()
+t5_base_model = T5ForConditionalGeneration.from_pretrained("t5-base", output_hidden_states = True)
+# t2 = time.perf_counter()
+# print("Model loading:", t2-t1)
 def promptrank_keywords(text: str, type: str | None = None):
     # print("main function called")
     setting_dict = get_setting_dict()
@@ -69,28 +73,38 @@ def promptrank_keywords(text: str, type: str | None = None):
     elif type == "abs":
         setting_dict["max_len"] = 27
     else:
-        setting_dict["max_len"] = 30    
+        setting_dict["max_len"] = len(text.split())
     
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     
     #log = Logger(args.log_dir + args.dataset_name + '.log')
-    start = time.time()
+    # start = time.time()
     #log.logger.info("Start Testing ...")
 
     # dataset, doc_list= data_process(setting_dict, args.dataset_dir, args.dataset_name)
     # dataloader = DataLoader(dataset, num_workers=4, batch_size=args.batch_size)
+    # t1 = time.perf_counter()
     dataset, doc_list= data_process(setting_dict,text ,"gold")
+    # t2 = time.perf_counter()
     dataloader = DataLoader(dataset, num_workers=0, batch_size=64)
-    model = T5ForConditionalGeneration.from_pretrained("t5-"+ setting_dict["model"])
-    model.to(device)
+    # t3 = time.perf_counter()
+    # model = T5ForConditionalGeneration.from_pretrained("t5-"+ setting_dict["model"])
+    # t4 = time.perf_counter()
+    # model.to(device)
+    t5_base_model.to(device)
+    # print("data processing:", t2-t1, "data loading:", t3-t2)
 
-    temp = keyphrases_selection(setting_dict, doc_list,model, dataloader, device)
+    # s = time.perf_counter()
+    # temp = keyphrases_selection(setting_dict, doc_list,model, dataloader, device)
+    temp = keyphrases_selection(setting_dict, doc_list,t5_base_model, dataloader, device)
+    # e = time.perf_counter()
+    # print("kp_selection time:", e-s)
     # print(temp)
     
     # print("main function finished")
     return temp
 
-    end = time.time()
+    # end = time.time()
     #log_setting(log, setting_dict)
     #log.logger.info("Processing time: {}".format(end-start))
 

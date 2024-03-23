@@ -85,7 +85,7 @@ class Model_Reviewer_Paper_Similarity(Base): # as of now this is only aimed for 
     __table_args__ = (ForeignKeyConstraint([reviewer_pk, paper_pk], [Rating.reviewer_pk, Rating.paper_pk]),)
 
     def __repr__(self):
-        return f"reviewer_pk: {self.reviewer_pk} || paper_pk: {self.paper_pk} || model_similarity: {self.model_similarity}"
+        return f"reviewer_pk: {self.reviewer_pk} || paper_pk: {self.paper_pk} || similarity_name: {self.similarity_name}"
 
 # Stand-alone table to track POST method status and errors
 class Status_and_Error(Base):

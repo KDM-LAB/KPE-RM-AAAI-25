@@ -6,7 +6,7 @@ from typing import Annotated
 from enum import Enum
 from sqlalchemy import func
 from keyphrase_models import model_dict
-from similarity_models import similarity_dict
+# from similarity_models import similarity_dict
 
 # models.Base.metadata.create_all(bind=engine) # Not creating db here, creating in db_populate file
 
@@ -99,8 +99,8 @@ def compute_similarity(background_tasks: BackgroundTasks,
                     skip: Annotated[int, Query(ge=0, le=476)] = 0,
                     limit: Annotated[int | None, Query(ge=1, description="If None, then computes similarity for all records, else computes for provided range")] = None,
                     db: Session = Depends(get_db)):
-    if similarity_name not in list(similarity_dict.keys()):
-        return {"message":f"Given similarity_name does not exist, insert any of the following: {list(similarity_dict.keys())}"}
+    # if similarity_name not in list(similarity_dict.keys()):
+    #     return {"message":f"Given similarity_name does not exist, insert any of the following: {list(similarity_dict.keys())}"}
     available_models = db.query(models.Model_Paper_Keywords.model_name).distinct().all()
     for item in available_models:
         if model_name == item[0]:

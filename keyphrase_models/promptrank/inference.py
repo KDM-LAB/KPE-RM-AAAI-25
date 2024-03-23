@@ -53,6 +53,7 @@ def init(setting_dict):
 #     return 0
 
 def keyphrases_selection(setting_dict, doc_list, model, dataloader, device, log=''):
+    # print(f"{doc_list=}")
     init(setting_dict)
     # print("inference function called")
     # print(len(doc_list))
@@ -64,27 +65,47 @@ def keyphrases_selection(setting_dict, doc_list, model, dataloader, device, log=
     cos_score_list = []
     doc_id_list = []
     pos_list = []
+    output_embedding_list = []
+    last_layer_decoder_output_embedding_list = []
     
     num_c_5 = num_c_10 = num_c_15 = 0
     num_e_5 = num_e_10 = num_e_15 = 0
     num_s = 0
     
     template_len = tokenizer(temp_de, return_tensors="pt")["input_ids"].shape[1] - 3
-    
-    for id, [en_input_ids, en_input_mask, de_input_ids, dic] in enumerate(tqdm(dataloader,desc="Evaluating:")):
+    # print(f"{template_len=}")
+    # print(f"{temp_de=}")
+    # for id, [en_input_ids, en_input_mask, de_input_ids, dic] in enumerate(tqdm(dataloader,desc="Evaluating:")):
+    for id, [en_input_ids, en_input_mask, de_input_ids, dic] in enumerate(dataloader):
+        # print(f"{id=}")
+        # print(f"{dic['de_input_len']=}")
         en_input_ids = en_input_ids.to(device)
+        # print(f"{en_input_ids.shape=}")
+        # print(f"{en_input_ids=}")
         en_input_mask = en_input_mask.to(device)
         de_input_ids = de_input_ids.to(device)
+        # print(f"{de_input_ids.shape=}")
+        # print(f"{de_input_ids=}")
 
         score = np.zeros(en_input_ids.shape[0])
+        # print(f"{score.shape=}")
         
         with torch.no_grad():
-            output = model(input_ids=en_input_ids, attention_mask=en_input_mask, decoder_input_ids=de_input_ids)[0]
-
+            import time
+            # start = time.perf_counter()
+            op = model(input_ids=en_input_ids, attention_mask=en_input_mask, decoder_input_ids=de_input_ids)
+            # print(f"{op.decoder_hidden_states[-2].shape=}")
+            # print(f"{op.encoder_hidden_states[-2].shape=}")
+            output = op[0]
+            decoder_last_layer_output = op.decoder_hidden_states[-1]
+            # end = time.perf_counter()
+            # print("model running time:", end-start)
+            # print(f"{output.shape=}")
             for i in range(template_len, de_input_ids.shape[1] - 3):
                 logits = output[:, i, :]
                 logits = logits.softmax(dim=1)
                 logits = logits.cpu().numpy()
+                # print(f"{logits.shape=}")
 
                 for j in range(de_input_ids.shape[0]):
                     if i < dic["de_input_len"][j]:
@@ -92,45 +113,83 @@ def keyphrases_selection(setting_dict, doc_list, model, dataloader, device, log=
                     elif i == dic["de_input_len"][j]:
                         score[j] = score[j] / np.power(dic["de_input_len"][j] - template_len, length_factor)
             
+            log_out = output[:, template_len:de_input_ids.shape[1] - 3, :]
+            filtered_decoder_last_layer_output = decoder_last_layer_output[:, template_len:de_input_ids.shape[1] - 3, :]
+            # print(f"{log_out.shape=}")
+            log_out = torch.mean(log_out, axis=1, dtype=torch.float32)
+            filtered_decoder_last_layer_output = torch.mean(filtered_decoder_last_layer_output, axis=1, dtype=torch.float32)
+            log_out = log_out.numpy()
+            filtered_decoder_last_layer_output = filtered_decoder_last_layer_output.numpy()
+            # print(f"{log_out.shape=}")
+
             doc_id_list.extend(dic["idx"])
             candidate_list.extend(dic["candidate"])
+            # print(f"{dic['candidate']=}")
             cos_score_list.extend(score)
             pos_list.extend(dic["pos"])
+            output_embedding_list.extend([v for v in log_out])
+            last_layer_decoder_output_embedding_list.extend([v for v in filtered_decoder_last_layer_output])
 
     cos_similarity_list["doc_id"] = doc_id_list
     cos_similarity_list["candidate"] = candidate_list
+    # print(f"{candidate_list=}")
     cos_similarity_list["score"] = cos_score_list
     cos_similarity_list["pos"] = pos_list
+    cos_similarity_list["output_embeddings"] = output_embedding_list
+    cos_similarity_list["last_layer_decoder_output_embedding"] = last_layer_decoder_output_embedding_list
     cosine_similarity_rank = pd.DataFrame(cos_similarity_list)
-    # print(len(doc_list))
+    # print(f"{len(doc_list)=}")
+    # print(f"{cosine_similarity_rank}")
+    # print(f"{cosine_similarity_rank=}, {type(cosine_similarity_rank)=}")
 
     for i in range(len(doc_list)):
         doc_len = len(doc_list[i].split())
         
         doc_results = cosine_similarity_rank.loc[cosine_similarity_rank['doc_id']==i]
+        # print(f"{doc_results=}, {type(doc_results)=}")
         #doc_results = cosine_similarity_rank.loc[cosine_similarity_rank]
         if enable_pos == True:
             doc_results["pos"] = doc_results["pos"] / doc_len + position_factor / (doc_len ** 3)
             doc_results["score"] = doc_results["pos"] * doc_results["score"]
 
+        # print(f"{doc_results=}, {type(doc_results)=}")
         ranked_keyphrases = doc_results.sort_values(by='score', ascending=False)
+        # print(f"{ranked_keyphrases=}, {type(ranked_keyphrases)=}")
         top_k = ranked_keyphrases.reset_index(drop=True)
+        # print(f"{top_k=}, {type(top_k)=}")
         top_k_can = top_k.loc[:, ['candidate']].values.tolist()
+        top_k_can_embeddings = top_k.loc[:, ['output_embeddings']].values.tolist()
+        top_k_can_last_layer_decoder_embeddings = top_k.loc[:, ['last_layer_decoder_output_embedding']].values.tolist()
+        # print(f"{top_k_can=}")
+        # print(f"{len(top_k_can_embeddings)=}")
+        # print(f"{len(top_k_can_embeddings[0])=}")
+        # print(f"{top_k_can_embeddings[0]=}")
 
         candidates_set = set()
         candidates_dedup = []
-        for temp in top_k_can:
+        embeddings_dedup = []
+        last_layer_decoder_embeddings_dedup = []
+        for idx, temp in enumerate(top_k_can):
             temp = temp[0].lower()
             if temp in candidates_set:
                 continue
             else:
                 candidates_set.add(temp)
                 candidates_dedup.append(temp)
+                embeddings_dedup.append(top_k_can_embeddings[idx][0])
+                last_layer_decoder_embeddings_dedup.append(top_k_can_last_layer_decoder_embeddings[idx][0])
 
+        # print(f"{candidates_dedup=}")
+        # print(f"{embeddings_dedup=}")
         j = 0
-        Matched = candidates_dedup[:15]
+        # Matched = candidates_dedup[:15]
+        Matched = candidates_dedup[:30] # Taking first 30 keyphrases
+        Matched_embeddings = embeddings_dedup[:30] # Taking first 30 keyphrases embeddings
+        Matched_last_layer_decoder_embeddings = last_layer_decoder_embeddings_dedup[:30]
+        # print(len(Matched_embeddings), len(Matched), Matched_embeddings[0].shape)
         porter = PorterStemmer()
-        for id, temp in enumerate(candidates_dedup[0:15]):
+        # for id, temp in enumerate(candidates_dedup[0:15]):
+        for id, temp in enumerate(candidates_dedup[0:30]):
             tokens = temp.split()
             tt = ' '.join(porter.stem(t) for t in tokens)
             
@@ -166,7 +225,8 @@ def keyphrases_selection(setting_dict, doc_list, model, dataloader, device, log=
         else:
             num_e_15 += len(top_k[0:15])
 
-        return ToReturn
+        # print(f"{ToReturn=}")
+        return ToReturn, Matched_embeddings, Matched_last_layer_decoder_embeddings
 
         
 

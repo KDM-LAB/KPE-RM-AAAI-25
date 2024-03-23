@@ -2,12 +2,12 @@ from scipy.stats import spearmanr, pearsonr, kendalltau
 import numpy as np
 
 def get_correlations(x, y):
+    if len(x) < 3:
+        return None # No point in computing correlation of 2 points. It'll either be +1, -1 NaN
     result = [list(pearsonr(x, y)), list(spearmanr(x, y)), list(kendalltau(x, y))]
-    for r in result:
-        for c in [0,1]:
-            if np.isnan(r[c]):
-                r[c] = 0.0
-            r[c] = round(r[c], 4)
+    if np.any(np.isnan(result)):
+        print(f"Found a correlation value of NaN, discarding it.\n{x=}\n{y=}")
+        return None
     return {"Pearson": {"Correlation": result[0][0],"P-Value": result[0][1]},
             "Spearman": {"Correlation": result[1][0],"P-Value": result[1][1]},
             "Kendalltau": {"Correlation": result[2][0],"P-Value": result[2][1]}}
