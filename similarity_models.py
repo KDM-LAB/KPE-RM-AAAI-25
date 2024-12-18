@@ -132,10 +132,10 @@ def cos_glove_cross_vector_representation(keyphrases: list[str]) -> np.ndarray:
                 keywords_vector.append(None)
     return keywords_vector
 
-def cosine_glove(manuscript_kp, past_paper_kp, sim_args):
+def cosine_glove(vec_m, past_paper_kp, sim_args):
     if sim_args[1] == "cross":
         pos_factor = float(sim_args[6])
-        vec_m = cos_glove_cross_vector_representation(manuscript_kp)
+        #vec_m = cos_glove_cross_vector_representation(manuscript_kp)
         vec_p = cos_glove_cross_vector_representation(past_paper_kp)
         total_similarity = 0
         total_count = 0
@@ -153,7 +153,7 @@ def cosine_glove(manuscript_kp, past_paper_kp, sim_args):
             return None
         return (total_similarity / total_count) * 5
     else: # sim_args[1] == "avg"
-        vec_m = cos_glove_avg_vector_representation(manuscript_kp)
+        #vec_m = cos_glove_avg_vector_representation(manuscript_kp)
         vec_p = cos_glove_avg_vector_representation(past_paper_kp)
         if (vec_m is None) or (vec_p is None):
             return None
@@ -167,12 +167,12 @@ def cos_sentbert_vector_representation(keyphrases: list[str]) -> np.ndarray:
         keywords_vector.append(sentbert_embeddings([item]))
     return keywords_vector
 
-def cosine_sentbert(manuscript_kp, past_paper_kp, sim_args):
-    manuscript_kp = [i for i in manuscript_kp if i] # getting rid of empty strings
+def cosine_sentbert(vec_m, past_paper_kp, sim_args):
+    #manuscript_kp = [i for i in manuscript_kp if i] # getting rid of empty strings
     past_paper_kp = [i for i in past_paper_kp if i]
     if sim_args[1] == "cross":
         pos_factor = float(sim_args[6])
-        vec_m = cos_sentbert_vector_representation(manuscript_kp)
+        #vec_m = cos_sentbert_vector_representation(manuscript_kp)
         vec_p = cos_sentbert_vector_representation(past_paper_kp)
         total_similarity = 0
         total_count = 0
@@ -185,7 +185,7 @@ def cosine_sentbert(manuscript_kp, past_paper_kp, sim_args):
             total_count += 1
         return (total_similarity / total_count) * 5
     else: # sim_args[1] == "avg"
-        vec_m = cos_sentbert_vector_representation(manuscript_kp)
+        #vec_m = cos_sentbert_vector_representation(manuscript_kp)
         vec_p = cos_sentbert_vector_representation(past_paper_kp)
         return cosine_similarity(np.mean(vec_m, axis=0), np.mean(vec_p, axis=0)) * 5
 
@@ -214,7 +214,7 @@ def similarity_computation(x: str|np.ndarray, y: str|np.ndarray, func_list: list
     if len(x) == 0 or len(y) == 0:
         raise(Exception(f"A paper with zero keyphrases is found. This should not happen. Please check.\nmanuscript_kp: {x}\npast_paper_kp: {y}"))
     if sim_args[0] != "cos-selfembed":
-        x = x.split(";")
+        # x = x.split(";")
         y = y.split(";")
     for fun in func_list[:-1]:
         x = fun(x, sim_args)

@@ -3,7 +3,7 @@ from sqlalchemy import desc, distinct
 import models, schemas
 from keyphrase_models import model_dict, model_summ_dict
 # from similarity_models import similarity_dict
-from similarity_models import get_similarity_function_list, similarity_computation
+from similarity_models import get_similarity_function_list, similarity_computation, cos_sentbert_vector_representation, cos_glove_cross_vector_representation
 from correlations import get_correlations, get_correlations_sync
 import numpy as np
 import os
@@ -322,9 +322,17 @@ def compute_papers_similarity(db: Session, model_name: str, similarity_name: str
             else: # sim_args[0] in ["jaccard", "cos-glove", "cos-sentbert"]
                 if reviewed_paper_data.model_keywords_wo_pdf:
                     similarity_wo_pdf, terms_wo_pdf = 0, 0
+                    manuscript_kp = reviewed_paper_data.model_keywords_wo_pdf.split(";")
+                    if sim_args[0] == "cos-sentbert":
+                        manuscript_kp = [i for i in manuscript_kp if i]
+                        vec_m = cos_sentbert_vector_representation(manuscript_kp)
+                    if sim_args[0] == "cos-glove":
+                        vec_m = cos_glove_cross_vector_representation(manuscript_kp)
+                    if sim_args[0] == "jaccard":
+                        vec_m = manuscript_kp
                     for past_paper in past_papers_data:
                         if past_paper.model_keywords_wo_pdf and (past_paper.paper_pk in ta_valid_past_papers):
-                            simm = similarity_computation(reviewed_paper_data.model_keywords_wo_pdf, past_paper.model_keywords_wo_pdf, sim_func_list, sim_args)
+                            simm = similarity_computation(vec_m, past_paper.model_keywords_wo_pdf, sim_func_list, sim_args)
                             if simm is not None:
                                 similarity_wo_pdf += simm
                                 terms_wo_pdf += 1
@@ -339,9 +347,17 @@ def compute_papers_similarity(db: Session, model_name: str, similarity_name: str
 
                 if (reviewed_paper_data.model_keywords_w_pdf):
                     similarity_w_pdf, terms_w_pdf = 0, 0
+                    manuscript_kp = reviewed_paper_data.model_keywords_w_pdf.split(";")
+                    if sim_args[0] == "cos-sentbert":
+                        manuscript_kp = [i for i in manuscript_kp if i]
+                        vec_m = cos_sentbert_vector_representation(manuscript_kp)
+                    if sim_args[0] == "cos-glove":
+                        vec_m = cos_glove_cross_vector_representation(manuscript_kp)
+                    if sim_args[0] == "jaccard":
+                        vec_m = manuscript_kp
                     for past_paper in past_papers_data:
                         if past_paper.model_keywords_w_pdf and (past_paper.paper_pk in pdf_valid_past_papers):
-                            simm = similarity_computation(reviewed_paper_data.model_keywords_w_pdf, past_paper.model_keywords_w_pdf, sim_func_list, sim_args)
+                            simm = similarity_computation(vec_m, past_paper.model_keywords_w_pdf, sim_func_list, sim_args)
                             if simm is not None:
                                 similarity_w_pdf += simm
                                 terms_w_pdf += 1
@@ -416,9 +432,17 @@ def compute_papers_similarity(db: Session, model_name: str, similarity_name: str
                 if reviewed_paper_data.model_keywords_wo_pdf:
                     max_similarity_wo_pdf = -1
                     val_pap_count = 0
+                    manuscript_kp = reviewed_paper_data.model_keywords_wo_pdf.split(";")
+                    if sim_args[0] == "cos-sentbert":
+                        manuscript_kp = [i for i in manuscript_kp if i]
+                        vec_m = cos_sentbert_vector_representation(manuscript_kp)
+                    if sim_args[0] == "cos-glove":
+                        vec_m = cos_glove_cross_vector_representation(manuscript_kp)
+                    if sim_args[0] == "jaccard":
+                        vec_m = manuscript_kp
                     for past_paper in past_papers_data:
                         if past_paper.model_keywords_wo_pdf and (past_paper.paper_pk in ta_valid_past_papers):
-                            sim = similarity_computation(reviewed_paper_data.model_keywords_wo_pdf, past_paper.model_keywords_wo_pdf, sim_func_list, sim_args)
+                            sim = similarity_computation(vec_m, past_paper.model_keywords_wo_pdf, sim_func_list, sim_args)
                             if sim is not None:
                                 val_pap_count += 1
                                 if sim > max_similarity_wo_pdf:
@@ -434,9 +458,17 @@ def compute_papers_similarity(db: Session, model_name: str, similarity_name: str
                 if reviewed_paper_data.model_keywords_w_pdf:
                     max_similarity_w_pdf = -1
                     val_pap_count = 0
+                    manuscript_kp = reviewed_paper_data.model_keywords_w_pdf.split(";")
+                    if sim_args[0] == "cos-sentbert":
+                        manuscript_kp = [i for i in manuscript_kp if i]
+                        vec_m = cos_sentbert_vector_representation(manuscript_kp)
+                    if sim_args[0] == "cos-glove":
+                        vec_m = cos_glove_cross_vector_representation(manuscript_kp)
+                    if sim_args[0] == "jaccard":
+                        vec_m = manuscript_kp
                     for past_paper in past_papers_data:
                         if past_paper.model_keywords_w_pdf and (past_paper.paper_pk in pdf_valid_past_papers):
-                            sim = similarity_computation(reviewed_paper_data.model_keywords_w_pdf, past_paper.model_keywords_w_pdf, sim_func_list, sim_args)
+                            sim = similarity_computation(vec_m, past_paper.model_keywords_w_pdf, sim_func_list, sim_args)
                             if sim is not None:
                                 val_pap_count += 1
                                 if sim > max_similarity_w_pdf:
